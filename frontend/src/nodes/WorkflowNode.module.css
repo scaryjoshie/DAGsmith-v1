@@ -1,0 +1,50 @@
+.process,
+.terminal {
+  background: #1a1b23;
+  border: 1px solid #2e303a;
+  font-size: 12px;
+  color: #c9cdd5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.process {
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 200px;
+  justify-content: flex-start;
+}
+
+.terminal {
+  border-radius: 20px;
+  padding: 6px 24px;
+  min-width: 80px;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.iconSlot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.handle {
+  width: 6px;
+  height: 6px;
+  background: #6a6e7a;
+  border: 1px solid #6a6e7a;
+}

@@ -1,0 +1,56 @@
+{
+  "id": "customer.scoring",
+  "description": "Route customers into priority or standard handling.",
+  "input": "CustomerDraft",
+  "entry_node": "assess",
+  "nodes": {
+    "assess": {
+      "kind": "python",
+      "label": "Assess tier",
+      "ref": ".assess:process",
+      "selector": ".assess:branch",
+      "input": "CustomerDraft",
+      "exits": {
+        "priority": {
+          "type": "PriorityCustomer"
+        },
+        "standard": {
+          "type": "ScoredCustomer"
+        }
+      }
+    }
+  },
+  "edges": [
+    {
+      "from_node": "assess",
+      "from_exit": "priority",
+      "to_flow_exit": "priority"
+    },
+    {
+      "from_node": "assess",
+      "from_exit": "standard",
+      "to_flow_exit": "standard"
+    }
+  ],
+  "public_exits": {
+    "priority": {
+      "type": "PriorityCustomer"
+    },
+    "standard": {
+      "type": "ScoredCustomer"
+    }
+  },
+  "layout": {
+    "nodes": {
+      "assess": {
+        "x": 220,
+        "y": 220
+      }
+    },
+    "viewport": {
+      "x": -40,
+      "y": -10,
+      "zoom": 1
+    }
+  }
+}
