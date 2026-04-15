@@ -1,6 +1,12 @@
 // Thin fetch wrapper around the DAGsmith backend.
 
-import type { FlowView, RunResponse, WorkspaceList, WorkspaceView } from './types';
+import type {
+  FlowView,
+  RunResponse,
+  UpdateSourceResponse,
+  WorkspaceList,
+  WorkspaceView,
+} from './types';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
@@ -47,5 +53,28 @@ export function runFlow(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value }),
     }
+  );
+}
+
+export function updateNodeSource(
+  workspace: string,
+  flowId: string,
+  nodeName: string,
+  source: string
+): Promise<UpdateSourceResponse> {
+  return request<UpdateSourceResponse>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeName)}/source`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    }
+  );
+}
+
+export function reloadWorkspace(workspace: string): Promise<WorkspaceView> {
+  return request<WorkspaceView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/reload`,
+    { method: 'POST' }
   );
 }

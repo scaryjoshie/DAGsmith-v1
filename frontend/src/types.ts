@@ -43,3 +43,8 @@ export interface RunResponse {
   exit: string;
   value: unknown;
 }
+
+export interface UpdateSourceResponse {
+  ok: boolean;
+  path: string;
+}

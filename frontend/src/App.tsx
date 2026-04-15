@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import { FlowGraph } from './components/FlowGraph';
 import { NodePanel } from './components/NodePanel';
@@ -29,6 +29,7 @@ export default function App() {
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Fetch the list of workspaces the backend knows about.
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function App() {
     if (!selectedFlowId || !workspace) return;
     let cancelled = false;
     setSelectedNode(null);
+    setEditMode(false);
     getFlow(workspace.name, selectedFlowId)
       .then((f) => {
         if (!cancelled) setFlow(f);
@@ -94,6 +96,24 @@ export default function App() {
       cancelled = true;
     };
   }, [selectedFlowId, workspace]);
+
+  // Exit edit mode whenever the user selects a different node.
+  useEffect(() => {
+    setEditMode(false);
+  }, [selectedNode]);
+
+  const refetchFlow = useCallback(async () => {
+    if (!workspace || !selectedFlowId) return;
+    try {
+      const f = await getFlow(workspace.name, selectedFlowId);
+      setFlow(f);
+    } catch (e) {
+      setLoadError((e as Error).message);
+    }
+  }, [workspace, selectedFlowId]);
+
+  const handleEnterEditMode = useCallback(() => setEditMode(true), []);
+  const handleExitEditMode = useCallback(() => setEditMode(false), []);
 
   const selectedNodeView =
     flow && selectedNode ? flow.nodes[selectedNode] ?? null : null;
@@ -156,17 +176,29 @@ export default function App() {
           {!loadError && !flow && <div className={styles.loading}>loading…</div>}
         </div>
 
-        <aside className={styles.sidebar}>
+        <aside
+          className={
+            editMode ? `${styles.sidebar} ${styles.sidebarWide}` : styles.sidebar
+          }
+        >
           <div className={styles.sidebarTop}>
-            {selectedNodeView ? (
-              <NodePanel node={selectedNodeView} />
+            {selectedNodeView && workspace && flow ? (
+              <NodePanel
+                node={selectedNodeView}
+                workspace={workspace.name}
+                flowId={flow.id}
+                editMode={editMode}
+                onEnterEditMode={handleEnterEditMode}
+                onExitEditMode={handleExitEditMode}
+                onSaveComplete={refetchFlow}
+              />
             ) : (
               <div className={styles.sidebarHint}>
                 <p>Click a node to inspect it.</p>
               </div>
             )}
           </div>
-          {workspace && flow && (
+          {!editMode && workspace && flow && (
             <RunPanel
               workspace={workspace.name}
               flowId={flow.id}

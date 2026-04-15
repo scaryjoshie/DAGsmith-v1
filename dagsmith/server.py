@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +81,15 @@ class RunResponse(BaseModel):
     value: Any
 
 
+class UpdateSourceRequest(BaseModel):
+    source: str
+
+
+class UpdateSourceResponse(BaseModel):
+    ok: bool
+    path: str
+
+
 app = FastAPI(title="DAGsmith UI")
 
 app.add_middleware(
@@ -111,6 +121,19 @@ def _load_cached(name: str) -> Workspace:
 
 def preload_workspace(name: str) -> Workspace:
     """Preload a workspace into the cache (called from the CLI at startup)."""
+    return _load_cached(name)
+
+
+def _reload_workspace(name: str) -> Workspace:
+    """Drop all cached modules under this namespace and reload from scratch."""
+    to_drop = [
+        key
+        for key in list(sys.modules.keys())
+        if key == name or key.startswith(f"{name}.")
+    ]
+    for key in to_drop:
+        del sys.modules[key]
+    _workspace_cache.pop(name, None)
     return _load_cached(name)
 
 
@@ -262,3 +285,68 @@ def run_flow(name: str, flow_id: str, request: RunRequest) -> RunResponse:
             value_dump = repr(result.value)
 
     return RunResponse(exit=result.exit, value=value_dump)
+
+
+@app.put(
+    "/api/workspaces/{name}/flows/{flow_id}/nodes/{node_name}/source",
+    response_model=UpdateSourceResponse,
+)
+def update_node_source(
+    name: str,
+    flow_id: str,
+    node_name: str,
+    request: UpdateSourceRequest,
+) -> UpdateSourceResponse:
+    ws = _get_or_404(name)
+    try:
+        func = ws.node_callable(flow_id, node_name)
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        source_file = inspect.getsourcefile(func)
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"could not determine source file for node {node_name!r}: {exc}",
+        ) from exc
+    if source_file is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"could not determine source file for node {node_name!r}",
+        )
+
+    path = Path(source_file).resolve()
+    try:
+        path.relative_to(ws.root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"refusing to write to {path}: outside workspace root {ws.root}"
+            ),
+        ) from exc
+
+    path.write_text(request.source, encoding="utf-8")
+    _reload_workspace(name)
+    return UpdateSourceResponse(ok=True, path=str(path))
+
+
+@app.post(
+    "/api/workspaces/{name}/reload",
+    response_model=WorkspaceView,
+)
+def reload_workspace(name: str) -> WorkspaceView:
+    try:
+        ws = _reload_workspace(name)
+    except WorkspaceError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"workspace reload failed: {exc}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"workspace reload failed: {type(exc).__name__}: {exc}",
+        ) from exc
+    return WorkspaceView(name=ws.package_name, flow_ids=ws.flow_ids)
