@@ -3,7 +3,7 @@ import '@xyflow/react/dist/style.css';
 import { FlowGraph } from './components/FlowGraph';
 import { NodePanel } from './components/NodePanel';
 import { RunPanel } from './components/RunPanel';
-import { getFlow, getWorkspace } from './api';
+import { getFlow, getWorkspace, listWorkspaces } from './api';
 import type { FlowView, WorkspaceView } from './types';
 import styles from './App.module.css';
 
@@ -15,18 +15,42 @@ function readWorkspaceFromURL(): string {
   return params.get('workspace') ?? DEFAULT_WORKSPACE;
 }
 
+function writeWorkspaceToURL(name: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('workspace', name);
+  window.history.replaceState(null, '', url.toString());
+}
+
 export default function App() {
-  const [workspaceName] = useState(readWorkspaceFromURL);
+  const [workspaceName, setWorkspaceName] = useState(readWorkspaceFromURL);
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
+  const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceView[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Load workspace metadata on mount.
+  // Fetch the list of workspaces the backend knows about.
+  useEffect(() => {
+    let cancelled = false;
+    listWorkspaces()
+      .then((list) => {
+        if (!cancelled) setAllWorkspaces(list.workspaces);
+      })
+      .catch(() => {
+        // ignore — fallback is the URL-param workspace
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load workspace metadata whenever the active workspace changes.
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
+    setFlow(null);
+    setSelectedFlowId(null);
     getWorkspace(workspaceName)
       .then((ws) => {
         if (cancelled) return;
@@ -34,6 +58,10 @@ export default function App() {
         if (ws.flow_ids.length > 0) {
           setSelectedFlowId(ws.flow_ids[0]);
         }
+        // Ensure this workspace is in the dropdown list.
+        setAllWorkspaces((prev) =>
+          prev.some((w) => w.name === ws.name) ? prev : [...prev, ws]
+        );
       })
       .catch((e) => {
         if (cancelled) return;
@@ -43,6 +71,12 @@ export default function App() {
       cancelled = true;
     };
   }, [workspaceName]);
+
+  function handleWorkspaceChange(newName: string): void {
+    if (newName === workspaceName) return;
+    writeWorkspaceToURL(newName);
+    setWorkspaceName(newName);
+  }
 
   // Load flow details when selection changes.
   useEffect(() => {
@@ -71,9 +105,20 @@ export default function App() {
         <div className={styles.spacer} />
         <label className={styles.selectorLabel}>
           workspace
-          <code className={styles.workspaceName}>
-            {workspace?.name ?? workspaceName}
-          </code>
+          <select
+            className={styles.select}
+            value={workspaceName}
+            onChange={(e) => handleWorkspaceChange(e.target.value)}
+          >
+            {!allWorkspaces.some((w) => w.name === workspaceName) && (
+              <option value={workspaceName}>{workspaceName}</option>
+            )}
+            {allWorkspaces.map((w) => (
+              <option key={w.name} value={w.name}>
+                {w.name}
+              </option>
+            ))}
+          </select>
         </label>
         {workspace && workspace.flow_ids.length > 0 && (
           <label className={styles.selectorLabel}>

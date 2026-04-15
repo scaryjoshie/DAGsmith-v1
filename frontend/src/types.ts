@@ -5,6 +5,10 @@ export interface WorkspaceView {
   flow_ids: string[];
 }
 
+export interface WorkspaceList {
+  workspaces: WorkspaceView[];
+}
+
 export interface NodeView {
   name: string;
   kind: string;

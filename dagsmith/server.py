@@ -65,6 +65,12 @@ class WorkspaceView(BaseModel):
     flow_ids: list[str]
 
 
+class WorkspaceList(BaseModel):
+    """List of currently known (cached) workspaces."""
+
+    workspaces: list[WorkspaceView]
+
+
 class RunRequest(BaseModel):
     value: Any
 
@@ -140,6 +146,21 @@ def _resolve_type(type_ref: str) -> Any:
     except ImportError:
         return None
     return getattr(module, attr_name, None)
+
+
+@app.get("/api/workspaces", response_model=WorkspaceList)
+def list_workspaces() -> WorkspaceList:
+    """List all workspaces the backend has loaded so far.
+
+    Starts with whatever was preloaded via the CLI; grows as the
+    frontend fetches additional workspaces on demand.
+    """
+    return WorkspaceList(
+        workspaces=[
+            WorkspaceView(name=ws.package_name, flow_ids=ws.flow_ids)
+            for ws in _workspace_cache.values()
+        ]
+    )
 
 
 @app.get("/api/workspaces/{name}", response_model=WorkspaceView)

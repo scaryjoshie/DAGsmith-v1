@@ -1,6 +1,6 @@
 // Thin fetch wrapper around the DAGsmith backend.
 
-import type { FlowView, RunResponse, WorkspaceView } from './types';
+import type { FlowView, RunResponse, WorkspaceList, WorkspaceView } from './types';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
@@ -19,6 +19,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`${res.status} ${res.statusText}: ${detail}`);
   }
   return (await res.json()) as T;
+}
+
+export function listWorkspaces(): Promise<WorkspaceList> {
+  return request<WorkspaceList>('/api/workspaces');
 }
 
 export function getWorkspace(name: string): Promise<WorkspaceView> {

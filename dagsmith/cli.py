@@ -22,8 +22,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Launch the DAGsmith visual UI backend",
     )
     ui_parser.add_argument(
-        "workspace",
-        help="Workspace package name (e.g., 'examples.minimal')",
+        "workspaces",
+        nargs="+",
+        help=(
+            "One or more workspace package names to preload "
+            "(e.g., examples.minimal examples.customer)"
+        ),
     )
     ui_parser.add_argument(
         "--host",
@@ -40,12 +44,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "ui":
-        return _run_ui(args.workspace, args.host, args.port)
+        return _run_ui(args.workspaces, args.host, args.port)
 
     return 1
 
 
-def _run_ui(workspace: str, host: str, port: int) -> int:
+def _run_ui(workspaces: list[str], host: str, port: int) -> int:
     try:
         import uvicorn
     except ImportError:
@@ -69,17 +73,20 @@ def _run_ui(workspace: str, host: str, port: int) -> int:
 
     from .server import app, preload_workspace
 
-    try:
-        ws = preload_workspace(workspace)
-    except Exception as exc:
+    for workspace in workspaces:
+        try:
+            ws = preload_workspace(workspace)
+        except Exception as exc:
+            print(
+                f"error: could not load workspace {workspace!r}: {exc}",
+                file=sys.stderr,
+            )
+            return 1
         print(
-            f"error: could not load workspace {workspace!r}: {exc}",
-            file=sys.stderr,
+            f"[dagsmith] loaded {workspace!r}: "
+            f"{len(ws.flow_ids)} flow(s): {ws.flow_ids}"
         )
-        return 1
 
-    print(f"[dagsmith] loaded workspace {workspace!r}")
-    print(f"[dagsmith] discovered {len(ws.flow_ids)} flow(s): {ws.flow_ids}")
     print(f"[dagsmith] backend: http://{host}:{port}")
     print("[dagsmith] frontend dev: `cd frontend && npm run dev`")
 
