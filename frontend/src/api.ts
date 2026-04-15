@@ -1,7 +1,11 @@
 // Thin fetch wrapper around the DAGsmith backend.
 
 import type {
+  AddEdgePayload,
+  AddNodePayload,
   FlowView,
+  LayoutPositions,
+  LayoutUpdateResponse,
   RunResponse,
   UpdateSourceResponse,
   WorkspaceList,
@@ -76,5 +80,77 @@ export function reloadWorkspace(workspace: string): Promise<WorkspaceView> {
   return request<WorkspaceView>(
     `/api/workspaces/${encodeURIComponent(workspace)}/reload`,
     { method: 'POST' }
+  );
+}
+
+export function addNode(
+  workspace: string,
+  flowId: string,
+  payload: AddNodePayload
+): Promise<FlowView> {
+  return request<FlowView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/nodes`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteNode(
+  workspace: string,
+  flowId: string,
+  nodeName: string
+): Promise<FlowView> {
+  return request<FlowView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeName)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export function addEdge(
+  workspace: string,
+  flowId: string,
+  payload: AddEdgePayload
+): Promise<FlowView> {
+  return request<FlowView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/edges`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteEdge(
+  workspace: string,
+  flowId: string,
+  fromNode: string,
+  fromExit: string
+): Promise<FlowView> {
+  return request<FlowView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/edges`,
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_node: fromNode, from_exit: fromExit }),
+    }
+  );
+}
+
+export function updateLayout(
+  workspace: string,
+  flowId: string,
+  positions: LayoutPositions
+): Promise<LayoutUpdateResponse> {
+  return request<LayoutUpdateResponse>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/layout`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodes: positions }),
+    }
   );
 }

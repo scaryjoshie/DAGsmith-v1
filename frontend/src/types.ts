@@ -29,6 +29,16 @@ export interface EdgeView {
   to_flow_exit: string | null;
 }
 
+export interface NodeLayoutPosition {
+  x: number;
+  y: number;
+}
+
+export interface FlowLayout {
+  nodes?: Record<string, NodeLayoutPosition>;
+  [key: string]: unknown;
+}
+
 export interface FlowView {
   id: string;
   input_type: string;
@@ -37,6 +47,7 @@ export interface FlowView {
   nodes: Record<string, NodeView>;
   edges: EdgeView[];
   public_exits: Record<string, string>;
+  layout: FlowLayout;
 }
 
 export interface RunResponse {
@@ -47,4 +58,28 @@ export interface RunResponse {
 export interface UpdateSourceResponse {
   ok: boolean;
   path: string;
+}
+
+export interface AddNodePayload {
+  name: string;
+  ref: string;
+  input: string;
+  exits: Record<string, string>;
+  selector?: string | null;
+  label?: string;
+  description?: string;
+  create_stub?: boolean;
+}
+
+export interface AddEdgePayload {
+  from_node: string;
+  from_exit: string;
+  to_node: string | null;
+  to_flow_exit: string | null;
+}
+
+export type LayoutPositions = Record<string, { x: number; y: number }>;
+
+export interface LayoutUpdateResponse {
+  ok: boolean;
 }

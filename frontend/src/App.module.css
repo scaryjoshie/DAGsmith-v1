@@ -64,6 +64,22 @@
   border-color: #4a4d5a;
 }
 
+.addNodeButton {
+  background: #2a3040;
+  border: 1px solid #3a4050;
+  border-radius: 3px;
+  color: #e8eaef;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 12px;
+  font-family: inherit;
+}
+
+.addNodeButton:hover {
+  background: #343b4d;
+  border-color: #4a5060;
+}
+
 .main {
   flex: 1;
   display: flex;

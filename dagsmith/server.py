@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from .workspace import Workspace, WorkspaceError, load_workspace
 
@@ -48,7 +49,7 @@ class EdgeView(BaseModel):
 
 
 class FlowView(BaseModel):
-    """UI-facing view of a full flow — graph + source code."""
+    """UI-facing view of a full flow — graph + source code + UI layout."""
 
     id: str
     input_type: str
@@ -57,6 +58,7 @@ class FlowView(BaseModel):
     nodes: dict[str, NodeView]
     edges: list[EdgeView]
     public_exits: dict[str, str]
+    layout: dict[str, Any]
 
 
 class WorkspaceView(BaseModel):
@@ -88,6 +90,44 @@ class UpdateSourceRequest(BaseModel):
 class UpdateSourceResponse(BaseModel):
     ok: bool
     path: str
+
+
+class AddNodeRequest(BaseModel):
+    name: str
+    ref: str
+    input_type: str = Field(alias="input")
+    exits: dict[str, str]
+    selector_ref: str | None = Field(default=None, alias="selector")
+    label: str = ""
+    description: str = ""
+    create_stub: bool = True
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AddEdgeRequest(BaseModel):
+    from_node: str
+    from_exit: str
+    to_node: str | None = None
+    to_flow_exit: str | None = None
+
+
+class DeleteEdgeRequest(BaseModel):
+    from_node: str
+    from_exit: str
+
+
+class NodeLayoutPosition(BaseModel):
+    x: float
+    y: float
+
+
+class UpdateLayoutRequest(BaseModel):
+    nodes: dict[str, NodeLayoutPosition]
+
+
+class UpdateLayoutResponse(BaseModel):
+    ok: bool
 
 
 app = FastAPI(title="DAGsmith UI")
@@ -171,6 +211,75 @@ def _resolve_type(type_ref: str) -> Any:
     return getattr(module, attr_name, None)
 
 
+def _read_flow_json(ws: Workspace, flow_id: str) -> tuple[Path, dict[str, Any]]:
+    """Return (path, parsed dict) for a flow's flow.json."""
+    flow_rel = flow_id.replace(".", "/")
+    path = ws.root / flow_rel / "flow.json"
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"flow.json for {flow_id!r} not found at {path}",
+        )
+    with path.open("r", encoding="utf-8") as f:
+        return path, json.load(f)
+
+
+def _write_flow_json(path: Path, data: dict[str, Any]) -> None:
+    """Write flow.json atomically with 2-space indent."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    tmp.replace(path)
+
+
+def _maybe_create_stub(ws: Workspace, flow_id: str, ref: str) -> None:
+    """If the ref points at a missing relative module, create a stub .py file."""
+    if not ref.startswith("."):
+        return
+    module_part, _, func_name = ref.partition(":")
+    if not func_name:
+        return
+    if module_part.count(".") > 1:
+        return
+    rel = module_part.lstrip(".")
+    if not rel:
+        return
+    flow_rel = flow_id.replace(".", "/")
+    flow_dir = ws.root / flow_rel
+    target = flow_dir / f"{rel}.py"
+    if target.exists():
+        return
+    stub = (
+        f'"""The `{flow_id.split(".")[-1]}:{func_name}` node stub."""\n\n'
+        f'from typing import Any\n\n\n'
+        f'def {func_name}(value: Any) -> Any:\n'
+        f'    # TODO: implement\n'
+        f'    return value\n'
+    )
+    target.write_text(stub, encoding="utf-8")
+
+
+def _reload_and_get_flow(name: str, flow_id: str) -> FlowView:
+    """Reload the workspace and return a fresh FlowView, mapping errors to HTTP 500."""
+    try:
+        _reload_workspace(name)
+    except WorkspaceError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"workspace reload failed after mutation: {exc}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"workspace reload failed after mutation: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        ) from exc
+    return get_flow(name, flow_id)
+
+
 @app.get("/api/workspaces", response_model=WorkspaceList)
 def list_workspaces() -> WorkspaceList:
     """List all workspaces the backend has loaded so far.
@@ -230,6 +339,16 @@ def get_flow(name: str, flow_id: str) -> FlowView:
         for edge in spec.edges
     ]
 
+    # Read layout fresh from disk — the PUT /layout endpoint does not reload
+    # the workspace (layout is opaque to the runtime), so the in-memory spec
+    # can be stale on layout specifically. A tiny extra JSON parse per GET is
+    # the cost of round-tripping dragged positions without forcing a reload.
+    try:
+        _, raw = _read_flow_json(ws, flow_id)
+        layout_data = raw.get("layout", {}) or {}
+    except HTTPException:
+        layout_data = dict(spec.layout)
+
     return FlowView(
         id=spec.id,
         input_type=spec.input_type,
@@ -238,6 +357,7 @@ def get_flow(name: str, flow_id: str) -> FlowView:
         nodes=nodes,
         edges=edges,
         public_exits=dict(spec.public_exits),
+        layout=layout_data,
     )
 
 
@@ -330,6 +450,246 @@ def update_node_source(
     path.write_text(request.source, encoding="utf-8")
     _reload_workspace(name)
     return UpdateSourceResponse(ok=True, path=str(path))
+
+
+@app.post(
+    "/api/workspaces/{name}/flows/{flow_id}/nodes",
+    response_model=FlowView,
+)
+def add_node(
+    name: str, flow_id: str, request: AddNodeRequest
+) -> FlowView:
+    ws = _get_or_404(name)
+    path, data = _read_flow_json(ws, flow_id)
+
+    nodes = data.setdefault("nodes", {})
+    if not isinstance(nodes, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"flow.json 'nodes' field is not a JSON object in {path}",
+        )
+    if request.name in nodes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"node {request.name!r} already exists in flow {flow_id!r}",
+        )
+
+    node_entry: dict[str, Any] = {
+        "kind": "python",
+        "ref": request.ref,
+        "input": request.input_type,
+        "exits": dict(request.exits),
+    }
+    if request.selector_ref is not None:
+        node_entry["selector"] = request.selector_ref
+    if request.label:
+        node_entry["label"] = request.label
+    if request.description:
+        node_entry["description"] = request.description
+
+    nodes[request.name] = node_entry
+
+    if request.create_stub:
+        _maybe_create_stub(ws, flow_id, request.ref)
+
+    _write_flow_json(path, data)
+    return _reload_and_get_flow(name, flow_id)
+
+
+@app.delete(
+    "/api/workspaces/{name}/flows/{flow_id}/nodes/{node_name}",
+    response_model=FlowView,
+)
+def delete_node(name: str, flow_id: str, node_name: str) -> FlowView:
+    ws = _get_or_404(name)
+    path, data = _read_flow_json(ws, flow_id)
+
+    nodes = data.get("nodes")
+    if not isinstance(nodes, dict) or node_name not in nodes:
+        raise HTTPException(
+            status_code=404,
+            detail=f"node {node_name!r} not found in flow {flow_id!r}",
+        )
+    if data.get("entry_node") == node_name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"cannot delete node {node_name!r}: it is the entry_node of "
+                f"flow {flow_id!r}"
+            ),
+        )
+
+    del nodes[node_name]
+
+    edges = data.get("edges")
+    if isinstance(edges, list):
+        data["edges"] = [
+            edge
+            for edge in edges
+            if not (
+                isinstance(edge, dict)
+                and (edge.get("from_node") == node_name or edge.get("to_node") == node_name)
+            )
+        ]
+
+    _write_flow_json(path, data)
+    return _reload_and_get_flow(name, flow_id)
+
+
+@app.post(
+    "/api/workspaces/{name}/flows/{flow_id}/edges",
+    response_model=FlowView,
+)
+def add_edge(
+    name: str, flow_id: str, request: AddEdgeRequest
+) -> FlowView:
+    ws = _get_or_404(name)
+    path, data = _read_flow_json(ws, flow_id)
+
+    if (request.to_node is None) == (request.to_flow_exit is None):
+        raise HTTPException(
+            status_code=400,
+            detail="edge must target exactly one of `to_node` or `to_flow_exit`",
+        )
+
+    nodes = data.get("nodes")
+    if not isinstance(nodes, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"flow.json 'nodes' field is not a JSON object in {path}",
+        )
+
+    from_entry = nodes.get(request.from_node)
+    if not isinstance(from_entry, dict):
+        raise HTTPException(
+            status_code=400,
+            detail=f"from_node {request.from_node!r} does not exist in flow {flow_id!r}",
+        )
+    from_exits = from_entry.get("exits")
+    if not isinstance(from_exits, dict) or request.from_exit not in from_exits:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"from_exit {request.from_exit!r} is not declared on node "
+                f"{request.from_node!r}"
+            ),
+        )
+
+    if request.to_node is not None and request.to_node not in nodes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"to_node {request.to_node!r} does not exist in flow {flow_id!r}",
+        )
+    if request.to_flow_exit is not None:
+        public_exits = data.get("public_exits")
+        if not isinstance(public_exits, dict) or request.to_flow_exit not in public_exits:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"to_flow_exit {request.to_flow_exit!r} is not declared in "
+                    f"public_exits"
+                ),
+            )
+
+    edges = data.setdefault("edges", [])
+    if not isinstance(edges, list):
+        raise HTTPException(
+            status_code=500,
+            detail=f"flow.json 'edges' field is not a JSON array in {path}",
+        )
+    for edge in edges:
+        if (
+            isinstance(edge, dict)
+            and edge.get("from_node") == request.from_node
+            and edge.get("from_exit") == request.from_exit
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"an edge from {request.from_node!r}:{request.from_exit!r} "
+                    f"already exists"
+                ),
+            )
+
+    new_edge: dict[str, Any] = {
+        "from_node": request.from_node,
+        "from_exit": request.from_exit,
+    }
+    if request.to_node is not None:
+        new_edge["to_node"] = request.to_node
+    else:
+        new_edge["to_flow_exit"] = request.to_flow_exit
+    edges.append(new_edge)
+
+    _write_flow_json(path, data)
+    return _reload_and_get_flow(name, flow_id)
+
+
+@app.delete(
+    "/api/workspaces/{name}/flows/{flow_id}/edges",
+    response_model=FlowView,
+)
+def delete_edge(
+    name: str, flow_id: str, request: DeleteEdgeRequest
+) -> FlowView:
+    ws = _get_or_404(name)
+    path, data = _read_flow_json(ws, flow_id)
+
+    edges = data.get("edges")
+    if not isinstance(edges, list):
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no edge from {request.from_node!r}:{request.from_exit!r} "
+                f"in flow {flow_id!r}"
+            ),
+        )
+
+    match_index: int | None = None
+    for idx, edge in enumerate(edges):
+        if (
+            isinstance(edge, dict)
+            and edge.get("from_node") == request.from_node
+            and edge.get("from_exit") == request.from_exit
+        ):
+            match_index = idx
+            break
+    if match_index is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no edge from {request.from_node!r}:{request.from_exit!r} "
+                f"in flow {flow_id!r}"
+            ),
+        )
+
+    edges.pop(match_index)
+    data["edges"] = edges
+    _write_flow_json(path, data)
+    return _reload_and_get_flow(name, flow_id)
+
+
+@app.put(
+    "/api/workspaces/{name}/flows/{flow_id}/layout",
+    response_model=UpdateLayoutResponse,
+)
+def update_layout(
+    name: str, flow_id: str, request: UpdateLayoutRequest
+) -> UpdateLayoutResponse:
+    ws = _get_or_404(name)
+    path, data = _read_flow_json(ws, flow_id)
+
+    layout = data.get("layout")
+    if not isinstance(layout, dict):
+        layout = {}
+    layout["nodes"] = {
+        node_name: {"x": pos.x, "y": pos.y}
+        for node_name, pos in request.nodes.items()
+    }
+    data["layout"] = layout
+
+    _write_flow_json(path, data)
+    return UpdateLayoutResponse(ok=True)
 
 
 @app.post(

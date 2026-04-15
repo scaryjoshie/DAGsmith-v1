@@ -48,3 +48,19 @@
   background: #6a6e7a;
   border: 1px solid #6a6e7a;
 }
+
+.process {
+  position: relative;
+}
+
+.exitLabel {
+  position: absolute;
+  bottom: -16px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #8a8e9a;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}

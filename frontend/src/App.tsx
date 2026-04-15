@@ -1,14 +1,25 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
+import type { Connection } from '@xyflow/react';
 import { FlowGraph } from './components/FlowGraph';
 import { NodePanel } from './components/NodePanel';
 import { RunPanel } from './components/RunPanel';
-import { getFlow, getWorkspace, listWorkspaces } from './api';
-import type { FlowView, WorkspaceView } from './types';
+import { AddNodeDialog } from './components/AddNodeDialog';
+import {
+  addEdge,
+  deleteEdge,
+  deleteNode,
+  getFlow,
+  getWorkspace,
+  listWorkspaces,
+  updateLayout,
+} from './api';
+import type { FlowView, LayoutPositions, WorkspaceView } from './types';
 import styles from './App.module.css';
 
 // Default workspace name; override via URL param ?workspace=...
 const DEFAULT_WORKSPACE = 'examples.minimal';
+const LAYOUT_DEBOUNCE_MS = 500;
 
 function readWorkspaceFromURL(): string {
   const params = new URLSearchParams(window.location.search);
@@ -30,6 +41,10 @@ export default function App() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
+  const pendingLayoutRef = useRef<LayoutPositions | null>(null);
+  const layoutTimerRef = useRef<number | null>(null);
 
   // Fetch the list of workspaces the backend knows about.
   useEffect(() => {
@@ -115,6 +130,92 @@ export default function App() {
   const handleEnterEditMode = useCallback(() => setEditMode(true), []);
   const handleExitEditMode = useCallback(() => setEditMode(false), []);
 
+  const handleConnect = useCallback(
+    async (connection: Connection) => {
+      if (!workspace || !flow || !connection.source || !connection.target) return;
+      const fromExit = connection.sourceHandle ?? 'out';
+      const isExitTarget = connection.target.startsWith('exit:');
+      try {
+        const updated = await addEdge(workspace.name, flow.id, {
+          from_node: connection.source,
+          from_exit: fromExit,
+          to_node: isExitTarget ? null : connection.target,
+          to_flow_exit: isExitTarget ? connection.target.slice('exit:'.length) : null,
+        });
+        setFlow(updated);
+      } catch (e) {
+        setLoadError((e as Error).message);
+      }
+    },
+    [workspace, flow]
+  );
+
+  const handleDeleteNode = useCallback(
+    async (nodeId: string) => {
+      if (!workspace || !flow) return;
+      const ok = window.confirm(`Delete node '${nodeId}' and its edges?`);
+      if (!ok) {
+        // User cancelled — we need to refetch to restore the node React Flow
+        // already removed locally via the delete-key handler.
+        await refetchFlow();
+        return;
+      }
+      try {
+        const updated = await deleteNode(workspace.name, flow.id, nodeId);
+        setFlow(updated);
+        if (selectedNode === nodeId) setSelectedNode(null);
+      } catch (e) {
+        setLoadError((e as Error).message);
+        await refetchFlow();
+      }
+    },
+    [workspace, flow, refetchFlow, selectedNode]
+  );
+
+  const handleDeleteEdge = useCallback(
+    async (fromNode: string, fromExit: string) => {
+      if (!workspace || !flow) return;
+      try {
+        const updated = await deleteEdge(workspace.name, flow.id, fromNode, fromExit);
+        setFlow(updated);
+      } catch (e) {
+        setLoadError((e as Error).message);
+        await refetchFlow();
+      }
+    },
+    [workspace, flow, refetchFlow]
+  );
+
+  const handleNodePositionChange = useCallback(
+    (nodeId: string, x: number, y: number) => {
+      if (!workspace || !flow) return;
+      const ws = workspace.name;
+      const fid = flow.id;
+      pendingLayoutRef.current = {
+        ...(pendingLayoutRef.current ?? {}),
+        [nodeId]: { x, y },
+      };
+      if (layoutTimerRef.current !== null) {
+        window.clearTimeout(layoutTimerRef.current);
+      }
+      layoutTimerRef.current = window.setTimeout(() => {
+        const positions = pendingLayoutRef.current;
+        pendingLayoutRef.current = null;
+        layoutTimerRef.current = null;
+        if (positions) {
+          updateLayout(ws, fid, positions).catch((e) => {
+            setLoadError((e as Error).message);
+          });
+        }
+      }, LAYOUT_DEBOUNCE_MS);
+    },
+    [workspace, flow]
+  );
+
+  const handleNodeCreated = useCallback((updated: FlowView) => {
+    setFlow(updated);
+  }, []);
+
   const selectedNodeView =
     flow && selectedNode ? flow.nodes[selectedNode] ?? null : null;
 
@@ -156,6 +257,15 @@ export default function App() {
             </select>
           </label>
         )}
+        {workspace && flow && (
+          <button
+            type="button"
+            className={styles.addNodeButton}
+            onClick={() => setShowAddDialog(true)}
+          >
+            + Add node
+          </button>
+        )}
       </header>
 
       <div className={styles.main}>
@@ -171,7 +281,14 @@ export default function App() {
             </div>
           )}
           {!loadError && flow && (
-            <FlowGraph flow={flow} onSelectNode={setSelectedNode} />
+            <FlowGraph
+              flow={flow}
+              onSelectNode={setSelectedNode}
+              onConnect={handleConnect}
+              onDeleteNode={handleDeleteNode}
+              onDeleteEdge={handleDeleteEdge}
+              onNodePositionChange={handleNodePositionChange}
+            />
           )}
           {!loadError && !flow && <div className={styles.loading}>loading…</div>}
         </div>
@@ -207,6 +324,15 @@ export default function App() {
           )}
         </aside>
       </div>
+
+      {showAddDialog && workspace && flow && (
+        <AddNodeDialog
+          workspace={workspace.name}
+          flowId={flow.id}
+          onClose={() => setShowAddDialog(false)}
+          onCreated={handleNodeCreated}
+        />
+      )}
     </div>
   );
 }
