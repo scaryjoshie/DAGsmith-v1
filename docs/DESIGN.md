@@ -4,7 +4,7 @@
 
 ## Vision
 
-DAGsmith is a tool for authoring Python code as executable flowcharts. It is **not** a no-code tool — it is explicitly **pro-code**. The goal is to make branchy, sequential info-processing pipelines legible and maintainable by representing them visually, while compiling to plain Python that slots into any codebase.
+DAGsmith is a tool for authoring Python code as executable flowcharts. It is **not** a no-code tool — it is explicitly **pro-code**. The goal is to make branchy, sequential info-processing pipelines legible and maintainable by representing them visually. A flow is a pure function: same input produces same output, with no persistent state, no `__init__`, and no lifecycle hooks. DAGsmith is a runtime library that interprets flows — it is not a compiler.
 
 > "I don't really want cluttered flow charts, it would actually be to represent code in a very simple way, especially things like tree-type decision making in a really easy to understand & visualize way."
 
@@ -18,44 +18,47 @@ The pitch: **write Python, but when a chunk of your logic is branchy or sequenti
 
 ## Core Mental Model
 
-**A flow is a function. A function is a flow.** This uniformity is the entire design.
+**A flow is a pure function. A function is a flow.** This uniformity is the entire design.
 
 - A **flow** is a DAG of nodes.
 - A **node** is either a Python callable or a reference to another flow.
-- A **flow compiles to a Python function** (or method).
+- A **flow is a pure function** — same input, same output, no persistent state, no lifecycle hooks.
+- A subflow (when added in Phase 2) is also a pure function — not a self-contained package that owns its own types or state.
 - Since both Python nodes and flows are just function-shaped units, they are interchangeable from the graph's perspective.
 
-> "The compiled output is beautifully uniform — every node compiles to a function call regardless of whether the target is three lines of Python or an entire sub-flow."
+> "Every node is a function call regardless of whether the target is three lines of Python or an entire sub-flow."
 
 ### Analogy
 
-Think of it like a Turing machine: a DFA (the DAG) plus a tape (the checkpointed Pydantic state). The graph is the program. The snapshots are the tape. Keeping the graph acyclic means you always make forward progress.
+Think of the graph as the program and the payload as the value being transformed. Each node is a pure function; each edge carries a typed value from one node to the next. Keeping the graph acyclic means you always make forward progress, and because nothing is stateful there is no hidden context to reason about.
 
 ---
 
 ## Packaging
 
-DAGsmith is a **standalone Python package** — a dev tool you install, not a library you import in application code. It's like a compiler: you install the compiler, but your compiled output doesn't depend on it.
+DAGsmith is a **standalone Python package** installed as a normal runtime dependency. A workspace IS a normal Python package: you install DAGsmith, your workspace imports it, and flows run interpreted. There is no compiled artifact to ship separately.
 
 ```
 pip install dagsmith
 ```
 
+A workspace is installed editable via `uv sync` (uv project mode). The filesystem is the source of truth; `dagsmith.json` is a manifest/config file.
+
 ### CLI
 
-- **`dagsmith init my_flows`** — scaffolds an importable DAGsmith package
-- **`dagsmith compile my_flows/customer_validation/flow.json`** — emits plain Python output
-- **`dagsmith run my_flows/customer_validation/flow.json --input data.json`** — interpreted/live execution
+- **`dagsmith init my_flows`** — scaffolds an importable DAGsmith workspace package
+- **`dagsmith run my_flows/customer_validation/flow.json --input data.json`** — interpreted execution
 - **`dagsmith ui`** — launches the React Flow web editor (local web app)
 
 ### Package Contents
 
-- The **compiler** (Python) — JSON flow → `.py` file
-- The **interpreter/runner** (Python) — executes flows with stepping/checkpointing
+- The **data model** (Python) — `FlowSpec`, `NodeSpec`, `EdgeSpec`, and friends
+- The **workspace loader** (Python) — discovers flows, eagerly imports referenced modules
+- The **runner** (Python) — pure-function interpreter that walks the DAG
 - The **web UI** (bundled React app, served locally) — visual editor
 - The **CLI** entry point
 
-The compiled output has **zero dependency on DAGsmith itself.** The only dependency is Pydantic, which the project already uses for type definitions.
+DAGsmith ships as a small runtime library (~750 lines plus Pydantic). It has no compiler. Workspaces depend on DAGsmith at both author time and runtime.
 
 ---
 
@@ -63,7 +66,7 @@ The compiled output has **zero dependency on DAGsmith itself.** The only depende
 
 ### Workspace Structure
 
-A DAGsmith workspace should be a normal importable Python package. The package root is the project/workspace root, not itself a flow.
+A DAGsmith workspace is a normal importable Python package. The package root is the project/workspace root, not itself a flow. It is installed editable via `uv sync` so flows can be imported from anywhere in the host codebase.
 
 ```
 my_flows/
@@ -72,7 +75,10 @@ my_flows/
   shared/                 # global reusable helpers
     __init__.py
     validation.py
-  datatypes/              # global reusable datatypes/contracts
+    types/                # types used by shared helpers
+      __init__.py
+      records.py
+  types/                  # workspace-wide types
     __init__.py
     records.py
     errors.py
@@ -81,10 +87,7 @@ my_flows/
     load.py
     validate_email.py
     enrich.py
-    shared/               # shared within this flow/subtree
-      __init__.py
-      customer_helpers.py
-    datatypes/            # datatypes within this flow/subtree
+    types/                # types used by this flow
       __init__.py
       customer_records.py
   scoring/                # another flow
@@ -92,14 +95,9 @@ my_flows/
     score_candidate.py
 ```
 
-The root package may contain global `shared/` and `datatypes/` directories. Since the root is not a flow, those names are unambiguously global. Actual flows live in subdirectories containing `flow.json`.
+The root package may contain a global `shared/` directory and a global `types/` directory. Since the root is not a flow, `types/` at the root is unambiguously a workspace-wide types folder. Actual flows live in subdirectories containing `flow.json`, and each flow may have its own `types/` folder beside `flow.json`.
 
-This gives us both:
-
-- an importable Python module during live/runtime authoring
-- an optional path to compiled/exported plain Python later
-
-The core promise becomes: source workspaces may depend on DAGsmith; compiled/exported output should not.
+The workspace IS the runtime target. DAGsmith is a normal runtime dependency; there is no compiled/exported artifact.
 
 ### Discovery
 
@@ -108,7 +106,9 @@ The simple discovery rule is:
 - every directory below the package root containing `flow.json` is a flow
 - flow ID is the relative path from the package root, joined with dots
 - the package root itself is not a flow in v1, so root-level `flow.json` is not allowed
-- `shared/` and `datatypes/` are reserved support folders, not flow names
+- `shared/` is a reserved support folder, not a flow name
+
+Types folders are not a reserved name — the convention is `types/`, but users can call the folder anything; DAGsmith does not enforce the name.
 
 Example:
 
@@ -150,68 +150,83 @@ The important split is:
 
 The loader should read `dagsmith.json` first as the project marker/config file, then discover and parse `flow.json` files from disk.
 
-Reserved names such as `shared` and `datatypes` should be hardcoded structural rules in DAGsmith, not user-editable config in `dagsmith.json`.
+Reserved structural names (currently just `shared`) should be hardcoded in DAGsmith, not user-editable config in `dagsmith.json`. Types folders are a user convention, not a reserved name.
 
 An `exports` concept may be useful later for deciding which flows are re-exported from the top-level package API, but it is probably unnecessary in v1.
 
 If the manifest drifts, the CLI should be able to rebuild it from disk.
 
-### Shared Helpers And Datatypes
+### Shared Helpers And Types
 
-Every level can have the same support structure:
+The rule for types is simple: **types live with the flow whose code uses them.**
 
-- `shared/` for reusable helper code
-- `datatypes/` for reusable contracts/models
+- Each flow may have an optional `types/` folder beside its `flow.json`.
+- The workspace root may have a `types/` folder for workspace-wide types.
+- Reusable callables in `shared/` have their own `types/` — consumers use absolute imports to reach them.
 
-At the package root, these are global. Inside a flow directory, they are local to that flow/subtree.
-
-Imports remain explicit Python imports:
-
-```python
-from .shared import normalize_email
-from .datatypes import Candidate
-```
-
-From a nested flow, parent shared code is allowed but visibly coupling:
+Imports remain explicit Python imports. For types local to the current flow:
 
 ```python
-from ..shared import normalize_email
-from ..datatypes import Candidate
+from .types import Candidate
 ```
 
-The UI should classify that as a parent/shared dependency, not hide it as ambient scope.
+For workspace-level types (single-level parent), local is the right word — this is the only non-local relative import allowed:
+
+```python
+from ..types import Candidate
+```
+
+Deeper relative imports (`...types`, etc.) are not allowed. Anything further than one level up must use an absolute import like `from my_flows.shared.types import Candidate`.
+
+Supported type kinds include Pydantic `BaseModel`, `@dataclass`, `Enum`, `NamedTuple`, `TypedDict`, and PEP 695 type aliases. DAGsmith does not invent its own type system.
+
+From a nested flow (Phase 2 territory), parent shared code is allowed but visibly coupling. The UI should classify that as a parent/shared dependency, not hide it as ambient scope.
 
 ### Key Architectural Rules
 
-1. **The workspace root is a Python package.** It contains `__init__.py`, `dagsmith.json`, optional global `shared/`, optional global `datatypes/`, and one or more flow directories.
+1. **The workspace root is a Python package.** It contains `__init__.py`, `dagsmith.json`, optional global `shared/`, optional global `types/`, and one or more flow directories.
 2. **A flow is a directory containing `flow.json`.** Node modules usually live shallowly beside `flow.json`.
-3. **`shared/` and `datatypes/` are reserved support folders.** They are not valid flow names.
+3. **`shared/` is a reserved support folder.** It is not a valid flow name. `types/` is a convention, not a reserved name.
 4. **Execution is a DAG; ownership/scope is a tree.** Folder nesting does not execute anything by itself.
-5. **Live/runtime mode may depend on DAGsmith.** Compiled/exported output should be self-contained plain Python.
+5. **DAGsmith is a runtime dependency.** The workspace imports DAGsmith and runs flows interpreted — there is no separate compiled artifact.
 
 ---
 
 ## Type System
 
-Uses **Pydantic models** for all I/O typing. Supports union types (e.g., `None | ExampleType`).
+The type system uses **ordinary Python types** — no invented type language.
 
-- Define a set of named models/contracts in `datatypes/`.
-- Each node declares which Pydantic model it takes in and which it puts out.
-- Every edge in the graph carries a specific type — no ambiguity.
-- The editor validates type compatibility at **design time** — incompatible connections are flagged immediately.
-- An **`Any` type** exists as an escape hatch.
-- Union types like `None | ExampleType` are supported — type annotations are stored as strings in the flow JSON, resolved at compile/design time against known datatypes.
-- Merge points (where branches converge) require both branches to output the same or compatible types for the downstream node.
+**One rule:** types live with the flow whose code uses them. Each flow has an optional `types/` folder, and the workspace root has a `types/` folder for workspace-wide types. Users can call the folder anything; `types/` is a convention, not a reserved name.
 
-> "Type compatibility should be caught during design. Perhaps we define a set of simple (non-functional) types globally, then we ensure that the outputs fill those types?"
+- Import flow-local types with `from .types import X`.
+- Import workspace-level types with `from ..types import X` (single-level up is still considered local).
+- Deeper relative imports are not allowed. Anything further uses absolute imports.
+- Reusable callables in `shared/` carry their own `types/` — consumers reach them with absolute imports.
+
+Supported type kinds:
+
+- Pydantic `BaseModel`
+- `@dataclass`
+- `Enum`
+- `NamedTuple`
+- `TypedDict`
+- PEP 695 type aliases
+- primitives, `list[T]`, `dict[str, T]`, unions like `T | U`, `Optional[T]`, `Literal[...]`
+- an `Any` escape hatch
+
+Every edge in the graph carries a specific type. The editor validates type compatibility at design time — incompatible connections are flagged immediately. Merge points require incoming exit payloads to be compatible with the downstream node's declared input.
+
+Type annotations are stored as strings in `flow.json` and resolved against the Python types that are imported at workspace load time.
+
+> "Type compatibility should be caught during design."
 > "We can also add an 'any' type just because it's nice to have a workaround."
 > "I would like to be able to give return types such as 'None | ExampleType'."
 
 ### Type Validation
 
-Python's `typing` module plus Pydantic handles the heavy lifting. Type annotations are stored as strings, resolved against the known type registry. `beartype` is a potential optional layer for runtime type checking in interpreted/live mode. No custom type system needed.
+Python's `typing` module plus Pydantic handles the heavy lifting. Pydantic is one supported backend for validation and serialization, but DAGsmith also accepts dataclasses, enums, TypedDicts, and NamedTuples. `beartype` is a potential optional layer for runtime type checking.
 
-Pydantic gives us serialization for free (`.model_dump()` / `.model_validate()`), which directly enables checkpointing.
+**Phase 1 does not build a type registry.** Types are reached by ordinary Python imports — the loader resolves the type annotation strings by looking up names in the modules that were eagerly imported when the workspace loaded. A richer type registry can come later if the UI needs one.
 
 ---
 
@@ -219,7 +234,7 @@ Pydantic gives us serialization for free (`.model_dump()` / `.model_validate()`)
 
 Each flow is stored in a `flow.json` file inside its flow directory. JSON is human-readable, git-diffable, and simple.
 
-A flow file contains both **semantic graph data** (what the runner/compiler needs) and **UI layout state** (what React Flow needs). Layout should be top-level and opaque to the runtime:
+A flow file contains both **semantic graph data** (what the runner needs) and **UI layout state** (what React Flow needs). Layout should be top-level and opaque to the runtime:
 
 ```json
 {
@@ -279,88 +294,17 @@ A flow file contains both **semantic graph data** (what the runner/compiler need
 }
 ```
 
-The `layout` key is **opaque to the runner/compiler** — it just passes through. React Flow reads/writes it. The runner/compiler only cares about `id`, `input`, `public_exits`, `entry_node`, `nodes`, and `edges`.
+The `layout` key is **opaque to the runner** — it just passes through. React Flow reads/writes it. The runner only cares about `id`, `input`, `public_exits`, `entry_node`, `nodes`, and `edges`.
 
 ---
 
 ## Compilation
 
-### What the Compiler Does
+DAGsmith currently has no compiler. Flows are loaded and run as interpreted Python functions via the pure-function runtime. Compilation to standalone code is **deferred indefinitely** — it may return as an optional export feature if a concrete use case emerges, but it is not on the current roadmap.
 
-The compiler takes a `flow.json` and emits a `.py` file. The output should look like **code you'd write by hand**.
+**Rationale:** the runtime is small (~750 lines), Pydantic is already a dependency, so the dependency cost of keeping DAGsmith as a runtime library is trivial. A compiler would be significant additional code with a much lower payoff than the features ahead of it (subflows, checkpointing, actions, editor intelligence, canvas).
 
-**Steps:**
-
-1. Parse the `flow.json`
-2. Topological sort the DAG
-3. Identify regions — linear chains, branching points (decision nodes), merge points (where branches reconverge)
-4. Emit Python: linear chains → sequential calls, decision nodes → `if/elif`, merge points → variable assignment from each branch
-5. Wrap in a function with Pydantic type annotations
-6. Prepend imports from datatypes, shared helpers, external libraries, and referenced flows
-
-### Compilation Examples
-
-**Sequential:**
-
-```
-[Load] → [Validate] → [Transform] → [Write]
-```
-```python
-def pipeline(input: RawData) -> WriteResult:
-    loaded = load(input)
-    validated = validate(loaded)
-    transformed = transform(validated)
-    return write(transformed)
-```
-
-**Conditionals — decision node returns a routing key, compiler emits if/elif:**
-
-```
-[Load] → <Valid?> → yes → [Transform] → [Write]
-                  → no  → [LogError]  → [WriteReport]
-```
-```python
-def pipeline(input: RawData) -> WriteResult | ErrorReport:
-    loaded = load(input)
-    route = check_valid(loaded)
-    if route == "yes":
-        transformed = transform(loaded)
-        return write(transformed)
-    elif route == "no":
-        error = log_error(loaded)
-        return write_report(error)
-```
-
-**Merging branches — branches that reconverge:**
-
-```
-[Load] → <Format?> → csv  → [ParseCSV]  ↘
-                   → json → [ParseJSON] → [Validate] → [Write]
-```
-```python
-def pipeline(input: RawData) -> WriteResult:
-    loaded = load(input)
-    route = check_format(loaded)
-    if route == "csv":
-        parsed = parse_csv(loaded)
-    elif route == "json":
-        parsed = parse_json(loaded)
-    validated = validate(parsed)
-    return write(validated)
-```
-
-**Sub-flow calls — a node referencing another flow is just a function call:**
-
-```python
-    # this node references the scoring flow, which compiled to score()
-    scored = score(ScoreInput(candidate=candidate))
-```
-
-### Merge Point Detection
-
-The hardest compiler problem: if two branches converge back to the same node, the compiler must figure out that downstream code uses a variable set by either branch. This is essentially "dominance frontier" analysis from compiler theory, but for user-authored DAGs it's likely simple enough to handle without the full algorithm.
-
-> "If this takes any more than a few thousand lines to write, we're probably doing something wrong."
+This removes the previous dual "compiled mode / live mode" framing. There is only one mode: interpreted, with an optional tracer hook for future checkpointing.
 
 ---
 
@@ -373,7 +317,7 @@ Each individual graph is a **DAG** (directed acyclic graph). No cycles within a 
 > "My assumption is that this is a simple state diagram with only one active state at a time (think of a TM, with a DFA + tape for storing data), and so we just checkpoint by storing the states when checkpoints are given."
 
 Benefits:
-- Topological sort → trivial compilation
+- Topological sort → trivial execution order
 - Guaranteed termination within a single graph
 - Simple execution model: "what's the next node?" always has a well-defined answer
 
@@ -385,7 +329,7 @@ Flows can call other flows (downward nesting), but **a sub-flow cannot call its 
 
 ### Loops
 
-Loops are handled **inside Python node code**, not at the graph level. A Python node can loop over data and call a compiled flow (which is just a function) on each iteration:
+Loops are handled **inside Python node code**, not at the graph level. A Python node can loop over data and call another flow (which is just a function) on each iteration:
 
 ```python
 # inside a Python node
@@ -413,69 +357,40 @@ The flow owns the edges. Python node code does not store pointers to downstream 
 
 ---
 
-## Execution Modes
+## Execution
 
-### Importable Runtime Mode
-
-A DAGsmith workspace can be imported as a normal Python package during development/runtime mode. This mode may depend on the DAGsmith library.
+DAGsmith has a single execution mode: the workspace is a Python package, the loader builds a `Workspace`, and the runner calls flows as pure functions.
 
 Example package entry:
 
 ```python
 # my_flows/__init__.py
-from dagsmith import load_project
+from dagsmith import load_workspace
 
-_project = load_project(__file__)
+_workspace = load_workspace(__file__)
 
-validate_and_transform = _project.flow("customer_validation")
-score_candidate = _project.flow("scoring")
+validate_and_transform = _workspace.flow("customer_validation")
+score_candidate = _workspace.flow("scoring")
 ```
 
-The loader should anchor itself from `__file__`, not the current working directory. It can then:
+The loader anchors itself from `__file__`, not the current working directory. It:
 
-1. find the package root
-2. read `dagsmith.json`
-3. discover `flow.json` files
-4. resolve callable refs
-5. validate the workspace
-6. expose flow callables
+1. finds the package root
+2. reads `dagsmith.json`
+3. discovers `flow.json` files
+4. eagerly imports every referenced Python module exactly once
+5. resolves callable and type refs against those imported modules
+6. validates the workspace
+7. exposes flow callables
 
-The preferred default is eager loading: resolve and cache callable refs when the project loads, then execute from the cached registry. A later `strict=False` mode can collect diagnostics for the UI instead of failing fast.
+### Runtime characteristics
 
-### Compiled Mode
+- **Pure-function runner, stateless.** The runner takes a `FlowSpec` and an input value and returns a result. It holds no state between calls. Two invocations with the same input produce the same output.
+- **Eager imports.** All referenced Python modules are imported once at `load_workspace()` time. Flow execution has **zero import machinery in the hot path** — no `importlib.import_module` calls, no module cache lookups, nothing.
+- **Python 3.13+.** Required for PEP 667 (reliably writable `f_locals`), which the Phase 3 action system depends on.
+- **Optional tracer.** The runner accepts an optional tracer/hook argument that will be used for checkpointing in Phase 2. If no tracer is passed, the runner has zero overhead beyond the per-node function call.
 
-A flow compiles to a **standalone `.py` file** with zero DAGsmith runtime dependencies. The output should look like code you'd write by hand.
-
-Example compiled output:
-
-```python
-# compiled from: customer_validation/flow.json
-from my_flows.datatypes.records import Record, ValidationResult
-from my_flows.datatypes.output import FlowOutput
-
-def validate_and_transform(input: FlowInput) -> FlowOutput:
-    validated = validate_schema(input.records)
-    if validated.has_errors:
-        return FlowOutput(clean=[], rejected=validated.records)
-    enriched = enrich_records(validated.records)
-    return FlowOutput(clean=enriched, rejected=[])
-```
-
-### Live / Interpreted Mode
-
-The same graph, interpreted at runtime. The engine walks the DAG, calls each node, and captures state between steps. Enables:
-
-- **Step + step-into** (like assembly-level debugging)
-- **Real-time visualization** of data flowing through the graph in the UI
-- **Checkpointing** at each node boundary
-
-> "Could probably do this assembly style, with step + step into, hooks and checkpointing."
-
-Both modes produce identical results. Live mode adds visualization and debugging overhead.
-
-> "We could probably make this work compiled + live."
-
-The live mode is the killer feature for the target use case: you're building an info processing pipeline, not sure about your branching logic, you throw test data at it in live mode and watch it flow through the graph, inspect intermediate Pydantic objects at each step. Once it works, compile it and drop it into your codebase as a normal import.
+The target use case is straightforward: you're building an info processing pipeline, not sure about your branching logic. You throw test data at it, watch it flow through the graph in the UI, and inspect intermediate values at each step. The same interpreted runner powers both CLI execution and UI-driven debugging.
 
 ---
 
@@ -493,31 +408,33 @@ At the flow level, debugging is trivially simple:
 
 ### Checkpointing
 
-Before each node executes, serialize the current state (Pydantic `.model_dump()`). Key by node ID or execution index. Resume from checkpoint N = deserialize snapshot, start from node N+1.
+Checkpoints are **snapshots of the values flowing along edges**, not snapshots of persistent flow state. Because flows are pure functions with no state, there is no "flow instance" to capture — only the payload currently being passed from one node to the next.
 
-State is fully serializable by definition (all data is Pydantic models). This gives you:
-- **Replay** — re-run from any checkpoint
-- **Time-travel debugging** — inspect any intermediate state
-- **Recovery** — resume from failure without re-running everything
+At each edge crossing, the runner (when given a tracer) records:
 
-The compiled function optionally accepts a context/tracer:
+- the edge (source node, source exit, target node)
+- the payload value that just crossed it
+- a serialized form of that payload for replay
 
-```python
-def validate_and_transform(input: FlowInput, ctx: FlowContext | None = None) -> FlowOutput:
-    validated = validate_schema(input.records)
-    if ctx: ctx.record("validate_schema", input=input.records, output=validated)
-    ...
-```
+Since payloads are ordinary Python values (Pydantic models, dataclasses, enums, primitives), they serialize through their normal mechanisms. This gives:
 
-If no context is passed, it's a normal function with zero overhead.
+- **Replay** — re-run from any edge checkpoint by re-invoking the downstream subgraph with the captured payload.
+- **Time-travel debugging** — inspect any value that crossed any edge.
+- **Recovery** — resume from a failure point without re-running everything upstream.
+
+There is no `ctx` object with persistence semantics. The tracer is an observer of values, not a storage layer for flow state. If no tracer is passed to the runner, execution has zero overhead beyond the per-node call.
+
+Checkpointing ships in Phase 2, not Phase 1. Phase 1 runs the flow end-to-end with no tracer.
 
 ### Call Stack for Nested Flows
 
-When a flow calls a sub-flow, push a new checkpoint context. Pop when returning. The checkpoint model is a **stack of flat lists**, not just a flat list.
+When a flow calls a sub-flow (Phase 2), the tracer pushes a new frame for the child flow's edge snapshots and pops on return. The checkpoint model is a stack of per-flow edge snapshot lists.
 
 ---
 
 ## Actions & Editor Authoring
+
+> **Phase note:** Actions are a Phase 3 feature, not Phase 1. The Phase 1 runtime has no action system. This section describes the target design the schema and runtime are being built toward.
 
 Actions are observer code — logging, metrics, audit trails, breakpoints — that runs at specific points inside node bodies without living in the node's source file. The goal: keep business code clean. Logging and observability normally uglify code; actions move that concern into a separate layer.
 
@@ -584,40 +501,15 @@ Chosen for cheap per-instance mounting (React Flow spawns many editors at once),
 
 ---
 
-## Class / Module Compilation
+## Flows as Methods on a Class
 
-Flows can optionally be grouped into a **module** that compiles to a Python class:
-
-- The module defines init state (db connections, config, etc.)
-- Each flow in the module becomes a **method**
-- Flows can be marked **public or private** (private → `_`-prefixed methods)
-
-```python
-# compiled from: candidate_processor.module.json
-class CandidateProcessor:
-    def __init__(self, config: ProcessorConfig):
-        self.db = connect(config.db_url)
-        self.threshold = config.score_threshold
-    
-    def score(self, input: CandidateInput) -> ScoreResult:
-        # compiled from scoring/flow.json
-        ...
-    
-    def _validate(self, input: ValidationInput) -> ValidationResult:
-        # private helper, compiled from validation/flow.json
-        ...
-```
-
-> "You could literally check off what flows you want to be public methods as well, which would be cool."
-> "Maybe we call it funcs though, to be more standard?"
-
-**Note:** This may be premature for v1. Functions-only covers most of the use case. Classes can be added later if needed.
+This was considered and decided against. Flows are pure functions, not methods on a class with persistent state. Shared resources (DB connections, loaded models, configuration) are handled via normal Python module-level imports, which already give you singleton semantics without dragging a class lifecycle into the flow model.
 
 ---
 
 ## Codebase Integration
 
-Since flows are importable in runtime mode and can compile to plain Python functions/classes, they integrate like any other Python module:
+A DAGsmith workspace IS a normal Python package. Callers import the workspace and call flows as normal functions — no compiled artifact, no separate build step, no special deployment. The workspace is installed editable via `uv sync` and DAGsmith is loaded as an ordinary runtime dependency.
 
 ```python
 # From a FastAPI endpoint
@@ -634,7 +526,7 @@ def test_validation():
     assert len(result.rejected) == 0
 ```
 
-Runtime/import mode may depend on DAGsmith. Compiled/exported mode should produce plain Python with no DAGsmith runtime dependency.
+DAGsmith is always loaded at import time; there is no separate compiled artifact to ship. This is the intentional tradeoff: a small runtime dependency in exchange for a much simpler, smaller codebase.
 
 ---
 
@@ -650,19 +542,18 @@ Runtime/import mode may depend on DAGsmith. Compiled/exported mode should produc
 ### Key Features
 - **LOD (Level of Detail) scaling** — zoom out collapses sub-flows to single labeled nodes, zoom in expands them
 - **Nesting navigation** — click into a sub-flow node to see its inner graph, back button to return
-- **Type-aware connections** — the UI knows available datatypes, validates connections at design time
+- **Type-aware connections** — the UI knows available types, validates connections at design time
 - **Good naming** — high ability to name/label nodes, edges, and flows
 - **Code editor per snippet node** — inline editing of Python code
-- **Compile button** — generates the `.py` output
-- **Live run button** — interprets the flow with visualization
-- **Public/private toggle** on flows within a module
+- **Run button** — interprets the flow with visualization; there is no compile step
+- **Types palette** — browse, create, and drag-drop types from `types/` folders onto node edges
 
 ### Proposed Workspace Layout
 
 The current UI shape that seems most aligned with the project is:
 
 - **Main canvas** in the center for the current flow
-- **Top bar or popup tray** for shared/global helpers, datatypes, and reusable flow-local resources
+- **Top bar or popup tray** for shared/global helpers, types, and reusable flow-local resources
 - **Left sidebar** showing nesting/ownership context so you can always tell where you are in the inheritance tree
 - **Right editor panel** for the selected node's code, docstring, dependencies, and configuration
 
@@ -716,7 +607,7 @@ Recommendation: start with option 1.
 | **Nevalang** | Compiled, statically typed dataflow language | Whole new language, not Python |
 | **Node-RED** | Gold standard flow-based UX | JavaScript/IoT focused |
 
-> "Nobody has built a tool that combines all of: classic flowchart visual vocabulary (not a node-graph wiring UI), pro-code Python with Pydantic typing, recursive nesting with LOD scaling, and compilation to standalone Python."
+> "Nobody has built a tool that combines all of: classic flowchart visual vocabulary (not a node-graph wiring UI), pro-code Python with Pydantic typing, recursive nesting with LOD scaling, and a pure-function runtime that drops cleanly into ordinary Python."
 
 ### Key distinction from LangGraph
 
@@ -726,31 +617,52 @@ Recommendation: start with option 1.
 
 ## Build Plan
 
-### Phase 1 — Schema + Compiler (~500 lines Python)
-- Define the `flow.json` schema (nodes, edges, conditions, metadata)
-- Define the `dagsmith.json` manifest schema
-- Write a compiler: JSON → Python function with Pydantic types
-- Hand-write 3 real flows in JSON, compile them, verify output is code you'd write by hand
+### Phase 1 — Schema + Loader + Runtime (~500 lines source + ~300 lines tests)
 
-### Phase 2 — Interpreter + Checkpointing (~300 lines)
-- Walk the DAG, call nodes, capture state between steps
+The minimum viable core. No frontend, no HTTP server, no actions, no compiler, no subflows.
+
+- Define the `flow.json` and `dagsmith.json` schemas (Pydantic models)
+- `load_workspace()` — discover flows, eagerly import referenced Python modules, resolve callable and type refs, validate
+- Pure-function runner — walk the DAG, call nodes, honor `emit(...)` and selectors, handle merges
+- One Python-only example workspace exercising plain returns, `emit`, selectors, and merges
+- Unit tests for schema, loader, and runner
+
+`NodeSpec.kind` still accepts the literal `"flow"` in the schema, but the Phase 1 loader raises `NotImplementedError` on any node with `kind == "flow"`. Subflows land in Phase 2.
+
+### Phase 2 — Subflows + Checkpointing
+- Flow nodes (subflow references) in the loader and runner
+- Tracer hook for edge-snapshot checkpointing
 - Step / step-into / resume from checkpoint
-- Validates the execution model before building UI
+- Call-stack model for nested flow execution
 
-### Phase 3 — React Flow UI (bulk of work)
-- Flow editor with classic flowchart vocabulary
-- LOD zoom: collapse/expand sub-flows
-- Type-aware connections
-- Inline code editor per node
-- Compile + live-run buttons
-- Persistent layout in `flow.json`
+### Phase 3 — Actions (AST rewrite, `sys._getframe`, PEP 667)
+- Anchor model tracked in DAGsmith state, not in source comments
+- `ast`-level rewrite of each node module at load time to inject action calls at anchors
+- Runtime plumbing for action functions to read host locals via `sys._getframe` and PEP 667 `f_locals`
+
+### Phase 4 — Editor Intelligence Backend
+- Jedi over HTTP via the `ui_server.py` sidecar
+- `{source, anchor, cursor} -> completions` endpoint used for both action authoring and node body editing
+- Synthetic-prefix composition so Jedi sees real in-scope names and types
+
+### Phase 5 — Frontend Editor Component
+- CodeMirror 6 with the Python language extension, wrapped in React
+- Completions, hover types, and lint diagnostics wired to the Phase 4 endpoint
+- Shiki for read-only display-only snippets
+
+### Phase 6 — React Flow Canvas
+- Classic flowchart vocabulary (rounded rects, diamonds, terminals)
+- Nodes, edges, drag-and-drop, types palette
+- LOD zoom, nesting navigation, persistent layout in `flow.json`
+- Run button, run visualization via the tracer
+
+There is no compiler phase. If a concrete use case for a standalone code exporter ever emerges, it can be added later as an optional side feature — it is not on the current roadmap.
 
 ---
 
 ## Open Design Questions
 
-1. **Conditional node interface** — Does the condition function receive the same Pydantic input as a regular node? Probably yes, for uniformity.
+1. **Conditional node interface** — Does the selector function receive the same input as the node itself, or the node's output? Currently the output, for uniformity with `emit`-style routing.
 2. **Error handling model** — Exceptions propagate naturally (simple) vs. explicit error edges (visual)?
 3. **Node authoring** — Separate `.py` files referenced by import path? Inline in the UI? Both?
-4. **Class compilation** — Ship in v1 or defer?
-5. **Import path mechanics** — Exact callable ref grammar, path resolution, and compiled-output import strategy.
+4. **Import path mechanics** — Exact callable ref grammar and path resolution for `.module:function`, `..module:function`, and absolute forms.
