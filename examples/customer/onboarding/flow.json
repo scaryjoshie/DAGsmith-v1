@@ -1,0 +1,78 @@
+{
+  "id": "onboarding",
+  "description": "Validate, enrich, score, and classify a raw customer record.",
+  "input": "examples.customer.onboarding.types.records.RawCustomer",
+  "entry_node": "normalize",
+  "nodes": {
+    "normalize": {
+      "kind": "python",
+      "ref": ".normalize:process",
+      "input": "examples.customer.onboarding.types.records.RawCustomer",
+      "exits": {
+        "out": "examples.customer.onboarding.types.records.NormalizedCustomer"
+      }
+    },
+    "validate_email": {
+      "kind": "python",
+      "ref": ".validate_email:check",
+      "input": "examples.customer.onboarding.types.records.NormalizedCustomer",
+      "exits": {
+        "valid": "examples.customer.onboarding.types.records.NormalizedCustomer",
+        "invalid": "examples.customer.onboarding.types.records.ValidationError"
+      }
+    },
+    "validate_age": {
+      "kind": "python",
+      "ref": ".validate_age:check",
+      "input": "examples.customer.onboarding.types.records.NormalizedCustomer",
+      "exits": {
+        "valid": "examples.customer.onboarding.types.records.NormalizedCustomer",
+        "invalid": "examples.customer.onboarding.types.records.ValidationError"
+      }
+    },
+    "enrich": {
+      "kind": "python",
+      "ref": ".enrich:process",
+      "input": "examples.customer.onboarding.types.records.NormalizedCustomer",
+      "exits": {
+        "out": "examples.customer.onboarding.types.records.EnrichedCustomer"
+      }
+    },
+    "score": {
+      "kind": "python",
+      "ref": ".score:process",
+      "input": "examples.customer.onboarding.types.records.EnrichedCustomer",
+      "exits": {
+        "out": "examples.customer.onboarding.types.records.ScoredCustomer"
+      }
+    },
+    "classify": {
+      "kind": "python",
+      "ref": ".classify:classify",
+      "input": "examples.customer.onboarding.types.records.ScoredCustomer",
+      "exits": {
+        "high_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
+        "medium_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
+        "low_risk": "examples.customer.onboarding.types.records.ScoredCustomer"
+      }
+    }
+  },
+  "edges": [
+    {"from_node": "normalize", "from_exit": "out", "to_node": "validate_email"},
+    {"from_node": "validate_email", "from_exit": "valid", "to_node": "validate_age"},
+    {"from_node": "validate_email", "from_exit": "invalid", "to_flow_exit": "invalid"},
+    {"from_node": "validate_age", "from_exit": "valid", "to_node": "enrich"},
+    {"from_node": "validate_age", "from_exit": "invalid", "to_flow_exit": "invalid"},
+    {"from_node": "enrich", "from_exit": "out", "to_node": "score"},
+    {"from_node": "score", "from_exit": "out", "to_node": "classify"},
+    {"from_node": "classify", "from_exit": "high_risk", "to_flow_exit": "high_risk"},
+    {"from_node": "classify", "from_exit": "medium_risk", "to_flow_exit": "medium_risk"},
+    {"from_node": "classify", "from_exit": "low_risk", "to_flow_exit": "low_risk"}
+  ],
+  "public_exits": {
+    "invalid": "examples.customer.onboarding.types.records.ValidationError",
+    "high_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
+    "medium_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
+    "low_risk": "examples.customer.onboarding.types.records.ScoredCustomer"
+  }
+}
