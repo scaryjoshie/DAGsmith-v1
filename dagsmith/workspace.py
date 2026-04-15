@@ -58,6 +58,30 @@ class Workspace:
     package_name: str
     _flows: Mapping[str, _LoadedFlow]
 
+    @property
+    def flow_ids(self) -> list[str]:
+        """Sorted list of flow IDs discovered in this workspace."""
+        return sorted(self._flows.keys())
+
+    def flow_spec(self, flow_id: str) -> "FlowSpec":
+        """Return the FlowSpec for a named flow (advanced introspection)."""
+        if flow_id not in self._flows:
+            raise WorkspaceError(f"unknown flow: {flow_id!r}")
+        return self._flows[flow_id].spec
+
+    def node_callable(
+        self, flow_id: str, node_name: str
+    ) -> Callable[..., Any]:
+        """Return the resolved callable for a specific node (for source inspection)."""
+        if flow_id not in self._flows:
+            raise WorkspaceError(f"unknown flow: {flow_id!r}")
+        loaded = self._flows[flow_id]
+        if node_name not in loaded.callables:
+            raise WorkspaceError(
+                f"unknown node {node_name!r} in flow {flow_id!r}"
+            )
+        return loaded.callables[node_name]
+
     def flow(self, flow_id: str) -> Callable[[Any], FlowResult]:
         """Return a callable that runs the named flow."""
         if flow_id not in self._flows:
