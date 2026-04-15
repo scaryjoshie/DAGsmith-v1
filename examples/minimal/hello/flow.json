@@ -1,0 +1,25 @@
+{
+  "id": "hello",
+  "input": "examples.minimal.hello.types.records.Greeting",
+  "entry_node": "greet",
+  "nodes": {
+    "greet": {
+      "kind": "python",
+      "ref": ".greet:process",
+      "selector": ".route:pick",
+      "input": "examples.minimal.hello.types.records.Greeting",
+      "exits": {
+        "formal": "examples.minimal.hello.types.records.Reply",
+        "casual": "examples.minimal.hello.types.records.Reply"
+      }
+    }
+  },
+  "edges": [
+    {"from_node": "greet", "from_exit": "formal", "to_flow_exit": "formal"},
+    {"from_node": "greet", "from_exit": "casual", "to_flow_exit": "casual"}
+  ],
+  "public_exits": {
+    "formal": "examples.minimal.hello.types.records.Reply",
+    "casual": "examples.minimal.hello.types.records.Reply"
+  }
+}
