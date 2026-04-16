@@ -23,19 +23,13 @@ class _Base(BaseModel):
 class NodeSpec(_Base):
     """A single node in a flow. Phase 1 supports only `python`-kind nodes."""
 
-    kind: Literal["python"]
+    kind: Literal["python", "flow"]
     ref: str
     input_type: TypeRef = Field(alias="input")
     exits: Mapping[str, TypeRef]
     selector_ref: Optional[str] = Field(default=None, alias="selector")
     label: str = ""
     description: str = ""
-
-    @model_validator(mode="after")
-    def _check_exits(self) -> "NodeSpec":
-        if not self.exits:
-            raise ValueError("nodes must declare at least one exit")
-        return self
 
 
 class EdgeSpec(_Base):
@@ -71,10 +65,4 @@ class FlowSpec(_Base):
     def _check_shape(self) -> "FlowSpec":
         if not self.nodes:
             raise ValueError("flows must declare at least one node")
-        if self.entry_node not in self.nodes:
-            raise ValueError(
-                f"entry_node {self.entry_node!r} is not a declared node"
-            )
-        if not self.public_exits:
-            raise ValueError("flows must declare at least one public exit")
         return self

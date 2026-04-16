@@ -58,21 +58,75 @@
     }
   },
   "edges": [
-    {"from_node": "normalize", "from_exit": "out", "to_node": "validate_email"},
-    {"from_node": "validate_email", "from_exit": "valid", "to_node": "validate_age"},
-    {"from_node": "validate_email", "from_exit": "invalid", "to_flow_exit": "invalid"},
-    {"from_node": "validate_age", "from_exit": "valid", "to_node": "enrich"},
-    {"from_node": "validate_age", "from_exit": "invalid", "to_flow_exit": "invalid"},
-    {"from_node": "enrich", "from_exit": "out", "to_node": "score"},
-    {"from_node": "score", "from_exit": "out", "to_node": "classify"},
-    {"from_node": "classify", "from_exit": "high_risk", "to_flow_exit": "high_risk"},
-    {"from_node": "classify", "from_exit": "medium_risk", "to_flow_exit": "medium_risk"},
-    {"from_node": "classify", "from_exit": "low_risk", "to_flow_exit": "low_risk"}
+    {
+      "from_node": "normalize",
+      "from_exit": "out",
+      "to_node": "validate_email"
+    },
+    {
+      "from_node": "validate_email",
+      "from_exit": "valid",
+      "to_node": "validate_age"
+    },
+    {
+      "from_node": "validate_email",
+      "from_exit": "invalid",
+      "to_flow_exit": "invalid"
+    },
+    {
+      "from_node": "validate_age",
+      "from_exit": "valid",
+      "to_node": "enrich"
+    },
+    {
+      "from_node": "validate_age",
+      "from_exit": "invalid",
+      "to_flow_exit": "invalid"
+    },
+    {
+      "from_node": "enrich",
+      "from_exit": "out",
+      "to_node": "score"
+    },
+    {
+      "from_node": "score",
+      "from_exit": "out",
+      "to_node": "classify"
+    },
+    {
+      "from_node": "classify",
+      "from_exit": "high_risk",
+      "to_flow_exit": "high_risk"
+    },
+    {
+      "from_node": "classify",
+      "from_exit": "medium_risk",
+      "to_flow_exit": "medium_risk"
+    },
+    {
+      "from_node": "classify",
+      "from_exit": "low_risk",
+      "to_flow_exit": "low_risk"
+    },
+    {
+      "from_node": "normalize",
+      "from_exit": "out",
+      "to_node": "enrich"
+    }
   ],
   "public_exits": {
     "invalid": "examples.customer.onboarding.types.records.ValidationError",
     "high_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
     "medium_risk": "examples.customer.onboarding.types.records.ScoredCustomer",
     "low_risk": "examples.customer.onboarding.types.records.ScoredCustomer"
+  },
+  "layout": {
+    "nodes": {
+      "validate_email": {
+        "x": 65.0,
+        "y": 111.0
+      }
+    },
+    "groups": []
   }
 }

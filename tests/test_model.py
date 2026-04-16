@@ -45,17 +45,20 @@ class TestNodeSpec:
         node = NodeSpec.model_validate(raw)
         assert node.selector_ref == ".mod:pick"
 
-    def test_empty_exits_raises(self):
+    def test_empty_exits_accepted_and_round_trips(self):
         raw = _valid_node_raw()
         raw["exits"] = {}
-        with pytest.raises(ValidationError):
-            NodeSpec.model_validate(raw)
-
-    def test_extra_fields_ignored(self):
-        raw = _valid_node_raw()
-        raw["unknown_field"] = "whatever"
         node = NodeSpec.model_validate(raw)
-        assert not hasattr(node, "unknown_field")
+        assert node.exits == {}
+        assert NodeSpec.model_validate(node.model_dump(by_alias=True)) == node
+
+    def test_flow_kind_accepted(self):
+        raw = _valid_node_raw()
+        raw["kind"] = "flow"
+        raw["ref"] = "customer.onboarding.validate"
+        node = NodeSpec.model_validate(raw)
+        assert node.kind == "flow"
+        assert NodeSpec.model_validate(node.model_dump(by_alias=True)) == node
 
 
 class TestEdgeSpec:
@@ -92,20 +95,38 @@ class TestFlowSpec:
         reparsed = FlowSpec.model_validate(dumped)
         assert reparsed == spec
 
-    def test_unknown_entry_node_raises(self):
+    def test_unknown_entry_node_accepted_and_round_trips(self):
         raw = _valid_flow_raw()
         raw["entry_node"] = "nonexistent"
-        with pytest.raises(ValidationError):
-            FlowSpec.model_validate(raw)
+        spec = FlowSpec.model_validate(raw)
+        assert spec.entry_node == "nonexistent"
+        assert FlowSpec.model_validate(spec.model_dump(by_alias=True)) == spec
 
-    def test_empty_public_exits_raises(self):
+    def test_empty_public_exits_accepted_and_round_trips(self):
         raw = _valid_flow_raw()
         raw["public_exits"] = {}
-        with pytest.raises(ValidationError):
-            FlowSpec.model_validate(raw)
-
-    def test_layout_is_placeholder(self):
-        raw = _valid_flow_raw()
-        raw["layout"] = {"nodes": {"n": {"x": 100, "y": 200}}}
         spec = FlowSpec.model_validate(raw)
-        assert spec.layout == {"nodes": {"n": {"x": 100, "y": 200}}}
+        assert spec.public_exits == {}
+        assert FlowSpec.model_validate(spec.model_dump(by_alias=True)) == spec
+
+    def test_unknown_top_level_field_tolerated(self):
+        raw = _valid_flow_raw()
+        raw["future_field"] = {"anything": 1}
+        spec = FlowSpec.model_validate(raw)
+        assert not hasattr(spec, "future_field")
+
+    def test_layout_groups_round_trip(self):
+        raw = _valid_flow_raw()
+        raw["layout"] = {
+            "nodes": {"n": {"x": 0, "y": 0}},
+            "groups": [
+                {"id": "g1", "node_ids": ["n"], "label": "Group"},
+            ],
+        }
+        spec = FlowSpec.model_validate(raw)
+        dumped = spec.model_dump(by_alias=True)
+        assert dumped["layout"]["nodes"] == {"n": {"x": 0, "y": 0}}
+        assert dumped["layout"]["groups"] == [
+            {"id": "g1", "node_ids": ["n"], "label": "Group"},
+        ]
+        assert FlowSpec.model_validate(dumped) == spec
