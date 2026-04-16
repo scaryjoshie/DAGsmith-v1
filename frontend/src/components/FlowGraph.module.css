@@ -1,0 +1,44 @@
+.root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.breadcrumb {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--border-0);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-2);
+  user-select: none;
+  letter-spacing: -0.01em;
+}
+
+.breadcrumbSegment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.breadcrumbSep {
+  color: var(--fg-3);
+  font-size: 9px;
+}
+
+.breadcrumbLeaf {
+  color: var(--fg-0);
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}

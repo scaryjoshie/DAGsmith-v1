@@ -1,40 +1,62 @@
 # DAGsmith — agent notes
 
-## Current state (branch `feat/subflows-chains-ui`)
+## Current state
 
-### Backend: M1-M4 landed, 108 tests passing
+### Backend (commit `d8cd3b4`): M1-M4 landed, 108 tests passing
 
-- **M1 (IR + diagnostics):** `NodeSpec.kind` accepts `python` and `flow`; semantic raises removed from `NodeSpec._check_exits` and `FlowSpec._check_shape`; `dagsmith/diagnostics.py` has `Diagnostic` (with `computed_field` id, `derived_from`), `SourceLocation`, `UnresolvableRef` sentinel, closed `DiagnosticCode` literal.
-- **M2 (runtime):** work-queue run loop with fan-out + visited-merge in `workspace.py`; `AmbiguousRoute` and `MultiplePublicExitsReached` exceptions; tracer hook on `run_flow`; Tarjan cross-flow cycle detection emitting `cross_flow_cycle` diagnostics; `unresolved_flow_ref` diagnostic at load.
-- **M3 (permissive loader + registry):** all seven §6.4 gaps relaxed. `_BrokenFlow` sentinel for malformed flow.json (sibling flows still load); `UnresolvableRef` returned by `_resolve_ref_or_sentinel`; `_validate_flow_structure` emits diagnostics; shape diagnostics (`missing_entry_node`, `empty_exits`, `empty_public_exits`). `WorkspaceRegistry` extracted from server module global. `update_node_source` falls back to ref-string parsing. `add_edge` allows fan-out.
-- **M4 (server split + endpoints):** `dagsmith/server/` is now a package — `app.py`, `registry.py`, `mutations.py`, `introspection.py`, `types_palette.py`, `schemas.py`, `_helpers.py`, and four route modules (`routes_read`, `routes_mutate`, `routes_run`, `routes_introspect`). New endpoints: `GET /workspaces/{w}/types` (palette), `POST/DELETE /flows/{fid}/group` (layout groups), `GET /flows/{fid}/diagnostics` + `GET /workspaces/{w}/diagnostics`, `GET /flows/{fid}/tree`. Diagnostics now included in `FlowView` and mutation responses per §6.3.
+- **M1**: IR + `dagsmith/diagnostics.py` (Diagnostic with `computed_field` id, `derived_from`, SourceLocation, UnresolvableRef, closed `DiagnosticCode` literal). `NodeSpec.kind` accepts `"python" | "flow"`. Semantic raises removed.
+- **M2**: Work-queue `_run` with sequential fan-out + visited-merge; `AmbiguousRoute` / `MultiplePublicExitsReached` exceptions; tracer hook on `run_flow`; Tarjan cross-flow cycle detection emitting `cross_flow_cycle` diagnostics; `unresolved_flow_ref` at load.
+- **M3**: Permissive loader. All seven §6.4 gaps relaxed. `_BrokenFlow` sentinel; `_resolve_ref_or_sentinel` returns `UnresolvableRef` (with `syntax_error` discriminated from `unresolved_ref`); shape diagnostics emitted; `WorkspaceRegistry` extracted.
+- **M4**: `dagsmith/server/` package (app, registry, mutations, introspection, types_palette, schemas, _helpers, routes_read/mutate/run/introspect). New endpoints: types palette, group CRUD, per-flow + workspace diagnostics, flow tree. Diagnostics included in `FlowView` and mutation responses.
 
-### Frontend: currently reverted to HEAD
+### Frontend (uncommitted working tree — NEEDS COMMIT)
 
-The frontend was taken through M5 (IDE shell with tabs + panes + popover) and a Vercel-aesthetic pass, but both caused breakage and the user asked for a revert. Frontend is back to the pre-M5 state: single-flow canvas + right-sidebar NodePanel + inline RunPanel + AddNodeDialog. Builds clean.
+**At the "pre-dockview good state":**
+- Vercel design tokens in `src/index.css` (black bg, thin borders, mono, sharp corners)
+- IDE shell (`Shell.tsx` + `Shell.module.css`): left sidebar + canvas area
+- `LeftSidebar` with Workspace / Flows / Types / Diagnostics sections + pinned Run & Add node
+- Top tab bar (`TabBar.tsx`) with dnd-kit sortable tabs + context menu (Split right / Split down / Close)
+- `PaneTree` renders nested split panes
+- `TabsProvider` + `reducer` with `mapPanes` early-out (fixes split-tab stack overflow), localStorage persistence, split keeps origin tab (doesn't move it)
+- `FlowGraph` wrapped in `<ReactFlowProvider>` per-instance, viewport cache per flow_id, brighter grid + edges than the aesthetic-pass version
+- `WorkflowNode` has the **switcher strip** at the bottom for multi-exit nodes (cells with per-exit labels + handles — no more overlapping labels)
+- `NodePopover` on canvas selection: kind chip, input, ref, exits, "Open source →"
+- `SourceTab` (read-only CodeMirror)
+- `FloatingRunPanel` overlay
+- `AddNodeDialog` simplified to one name field, Enter to create (backend defaults the rest)
+- `vite.config.ts` has `resolve.dedupe` + `resolve.alias` + `optimizeDeps.include` for `@dnd-kit/*` (fixes invalid-hook-call under React 19 Vite HMR)
 
-## Working method (what I got wrong and what to do instead)
+**Deliberately NOT at this state (these came later and broke things):**
+- `flowCache` multi-flow state (each tab fetches its own flow independently)
+- Per-instance tab IDs (same flow can appear in multiple panes)
+- dockview migration (attempted, rolled back)
+- Frontend Ctrl/Cmd+W keybinding + focus-visible rings (cheap to add if wanted)
 
-The user called out that this session degenerated into "bashing our heads against a wall and generating subpar code." Retrospective:
+### Known limitations at the current frontend state
 
-- **Too many concurrent refactors.** I chained design-pass + node redesign + dnd-kit install + dockview migration + AddNode rewrite without verifying each step. Don't do this.
-- **Build-green is not feature-works.** Running `npm run build` does not confirm the user-facing behavior. Every UI change must be verified in a real browser via playwright-cli before moving on.
-- **Scope creep.** "Minor design pass" became a full CSS overhaul. If the user asks for X, do X. Don't also "improve" Y.
+- **Single-tab split is a visual no-op.** `split` action removes the tab from origin, new pane gets it, origin collapses. Need 2+ tabs open before split shows two panes. Fix requires rethinking split semantics.
+- **Stale tab on workspace switch.** Tabs saved per-workspace in localStorage but if you switch workspace and a flow with the same ID doesn't exist there, you see a "loading…" forever. Known.
+- `classify` auto-layout packs the 3 exit pills horizontally, tight but not overlapping anymore.
 
-**Going forward:**
+## Working method (non-negotiable)
 
-1. One change at a time. User approves → implement → screenshot via playwright → user confirms keep → commit → next.
-2. Dev server + playwright must be running for every UI change. Open the feature in a browser and use it before claiming done.
-3. No unsolicited aesthetic changes.
-4. Commit at each known-good state so we can bisect.
+This session wrecked a working state by chaining too many rewrites. Going forward:
+
+1. **One change at a time.** User describes → you implement → playwright-cli verify in browser → commit → next.
+2. **Build-green is NOT feature-works.** `npm run build` passing does not mean the feature works. Always open in a browser.
+3. **No unsolicited aesthetic changes.** If user asks for X, do X. Don't also "improve" Y.
+4. **Agent teams by default** for multi-step work. Use `TeamCreate` + `TaskCreate` + spawn via `Agent` with `team_name`. Agents coordinate via `SendMessage`.
+5. **Commit at every known-good state.** Uncommitted working tree is unrecoverable if something goes sideways.
 
 ## Prefer libraries
 
-For UI primitives (drag-and-drop, split panes, focus traps, command palettes) use an established library. Hand-rolled versions tend to be buggier and less accessible. Exception: skip a library only when it would make the code longer AND less readable AND less correct.
+For UI primitives (drag-and-drop, split panes, focus traps, command palettes): use an established library. Hand-rolled versions tend to be buggier and less accessible. Skip the library only when it would make code longer AND less readable AND less correct.
 
-**Tried and rejected this session:**
-- `@dnd-kit/*` for tab drag: installed, hit React-19 invalid-hook-call under Vite. Vite dedupe+alias fix worked.
-- `dockview-react` for pane management: installed, migration incomplete (panel components stale-closure over renderTab, state subscription bug). Rolled back in favor of reverting to pre-M5 frontend.
+Currently in use:
+- `@dnd-kit/*` for tab reordering (needs Vite `dedupe` + `optimizeDeps.include` to avoid React 19 invalid-hook-call)
+- `@xyflow/react` for the flow graph canvas
+- `@codemirror/*` + `@uiw/react-codemirror` for source editing
+- Pydantic v2 + FastAPI on backend
 
 ## Permissive posture (SPEC §3)
 
@@ -44,9 +66,13 @@ Backend accepts any shape, emits diagnostics. Runtime raises at the point of vio
 
 - Backend: `uv run dagsmith ui examples.customer` (port 8001)
 - Frontend: `cd frontend && npm run dev` (port 5173)
-- Tests: `uv run pytest -q` from repo root (108 currently)
-- Visual verify: `playwright-cli open --browser=chromium http://localhost:5173/?workspace=examples.customer` then `screenshot`
+- Tests: `uv run pytest -q` from repo root
+- Visual verify: `playwright-cli open --browser=chromium http://localhost:5173/?workspace=examples.customer` + `screenshot`
 
 ## Spec
 
-`docs/SPEC.md` is the source of truth for feature scope. `docs/CORE_MODEL.md` and `docs/DESIGN.md` give the project philosophy (pro-code, DAG-only, pure-function flows).
+`docs/SPEC.md` is source of truth for scope. `docs/CORE_MODEL.md` + `docs/DESIGN.md` have project philosophy (pro-code, DAG-only, pure-function flows).
+
+## Transcripts as recovery
+
+Claude Code stores conversation transcripts at `~/.claude/projects/-Users-joshua-dev-dagsmith/*.jsonl` with full `Write`/`Edit` tool inputs. If file contents get lost to an `rm` or `git checkout --` before committing, the exact content can be extracted by JSONL-grepping for the right Write call and writing the content back out. Prefer this over rewriting from memory.

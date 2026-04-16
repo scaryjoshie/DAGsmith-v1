@@ -1,234 +1,44 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.35);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 25vh;
   z-index: 100;
 }
 
-.modal {
-  width: 480px;
-  max-height: 90vh;
+.mini {
   background: #12141c;
-  border: 1px solid #2e303a;
+  border: 1px solid #3a4050;
   border-radius: 6px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  display: flex;
-  flex-direction: column;
-  color: #c9cdd5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  padding: 14px 18px;
-  border-bottom: 1px solid #2e303a;
-}
-
-.title {
-  flex: 1;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #e8eaef;
-}
-
-.closeButton {
-  background: transparent;
-  border: none;
-  color: #6a6e7a;
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 0 6px;
-}
-
-.closeButton:hover {
-  color: #c9cdd5;
-}
-
-.body {
-  padding: 16px 18px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6a6e7a;
-}
-
-.input {
-  background: #1a1b23;
-  border: 1px solid #2e303a;
-  border-radius: 3px;
-  color: #c9cdd5;
-  padding: 6px 8px;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  outline: none;
-}
-
-.input:focus {
-  border-color: #4a4d5a;
-}
-
-.exitsList {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  width: 340px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.exitRow {
-  display: grid;
-  grid-template-columns: 110px 1fr auto;
-  gap: 6px;
-  align-items: center;
-}
-
-.exitName,
-.exitType {
-  background: #1a1b23;
+.miniInput {
+  background: #0f1117;
   border: 1px solid #2e303a;
-  border-radius: 3px;
-  color: #c9cdd5;
-  padding: 5px 7px;
-  font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  outline: none;
-}
-
-.exitName:focus,
-.exitType:focus {
-  border-color: #4a4d5a;
-}
-
-.iconButton {
-  background: #1a1b23;
-  border: 1px solid #2e303a;
-  border-radius: 3px;
-  color: #6a6e7a;
-  cursor: pointer;
-  font-size: 14px;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.iconButton:hover:not(:disabled) {
-  color: #c9cdd5;
-  border-color: #4a4d5a;
-}
-
-.iconButton:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.addRowButton {
-  align-self: flex-start;
-  background: transparent;
-  border: 1px dashed #2e303a;
-  border-radius: 3px;
-  color: #6a6e7a;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 5px 10px;
-  margin-top: 2px;
-}
-
-.addRowButton:hover {
-  color: #c9cdd5;
-  border-color: #4a4d5a;
-}
-
-.checkboxRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: #c9cdd5;
-}
-
-.checkboxRow input {
-  accent-color: #4a4d5a;
-}
-
-.error {
-  background: #1a0f0f;
-  border: 1px solid #7f1d1d;
   border-radius: 4px;
-  padding: 8px 10px;
-}
-
-.errorLabel {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #fca5a5;
-  margin-bottom: 4px;
-}
-
-.errorBody {
-  margin: 0;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
-  color: #fca5a5;
-  white-space: pre-wrap;
-}
-
-.footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid #2e303a;
-}
-
-.cancelButton,
-.submitButton {
-  background: #1a1b23;
-  border: 1px solid #2e303a;
-  border-radius: 3px;
-  color: #c9cdd5;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 6px 14px;
-  font-family: inherit;
-}
-
-.cancelButton:hover:not(:disabled) {
-  border-color: #4a4d5a;
-}
-
-.submitButton {
-  background: #2a3040;
-  border-color: #3a4050;
   color: #e8eaef;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
 }
 
-.submitButton:hover:not(:disabled) {
-  background: #343b4d;
-  border-color: #4a5060;
+.miniInput:focus-visible {
+  border-color: #4a90e2;
 }
 
-.submitButton:disabled,
-.cancelButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.miniError {
+  color: #e06c6c;
+  font-size: 11px;
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
 }

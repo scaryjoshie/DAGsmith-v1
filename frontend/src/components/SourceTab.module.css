@@ -1,0 +1,85 @@
+.root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.header {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--border-0);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: -0.01em;
+}
+
+.filename {
+  color: var(--fg-0);
+  font-weight: 500;
+}
+
+.path {
+  color: var(--fg-3);
+  font-size: 10px;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-0);
+}
+
+.editor :global(.cm-editor) {
+  height: 100%;
+  font-size: var(--text-sm);
+  background: var(--bg-0);
+}
+
+.editor :global(.cm-scroller) {
+  font-family: var(--font-mono);
+}
+
+.editor :global(.cm-gutters) {
+  background: var(--bg-0);
+  border-right: 1px solid var(--border-0);
+  color: var(--fg-3);
+}
+
+.placeholder {
+  padding: 20px;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+
+.error {
+  padding: 20px;
+  color: var(--red);
+}
+
+.errorLabel {
+  font-weight: 500;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+
+.errorBody {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  margin: 0;
+  color: var(--fg-1);
+}

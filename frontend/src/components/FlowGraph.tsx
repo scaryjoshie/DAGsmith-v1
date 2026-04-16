@@ -1,23 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
   MarkerType,
   ReactFlow,
+  ReactFlowProvider,
   applyNodeChanges,
   type Connection,
   type Edge,
   type NodeChange,
+  type Viewport,
 } from '@xyflow/react';
 import { PythonIcon } from '../icons/BrandIcons';
 import { WorkflowNode } from '../nodes/WorkflowNode';
 import type { WorkflowNode as WorkflowNodeType } from '../nodes/WorkflowNode';
 import type { FlowView } from '../types';
+import { NodePopover } from './NodePopover';
+import styles from './FlowGraph.module.css';
 
 const nodeTypes = { workflow: WorkflowNode };
 
 const Y_SPACING = 160;
 const X_SPACING = 260;
+
+// Module-level cache of viewport state per flow_id. Tabs unmount when
+// inactive, so we restore the viewport on remount to give the illusion of
+// "each tab preserves its own viewport" per SPEC §7.2.
+const viewportCache = new Map<string, Viewport>();
 
 interface FlowGraphProps {
   flow: FlowView;
@@ -26,20 +35,29 @@ interface FlowGraphProps {
   onDeleteNode: (nodeId: string) => void;
   onDeleteEdge: (fromNode: string, fromExit: string) => void;
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
+  onOpenSource: (nodeId: string, split: boolean) => void;
 }
 
-export function FlowGraph({
+export function FlowGraph(props: FlowGraphProps) {
+  return (
+    <ReactFlowProvider>
+      <FlowGraphInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowGraphInner({
   flow,
   onSelectNode,
   onConnect,
   onDeleteNode,
   onDeleteEdge,
   onNodePositionChange,
+  onOpenSource,
 }: FlowGraphProps) {
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
 
-  // Re-seed local nodes whenever the flow prop changes (new flow loaded or refetched).
   useEffect(() => {
     setNodes(initial.nodes);
   }, [initial.nodes]);
@@ -83,42 +101,64 @@ export function FlowGraph({
     [onDeleteNode]
   );
 
+  const cachedViewport = viewportCache.get(flow.id);
+  const viewportRef = useRef<Viewport | null>(cachedViewport ?? null);
+  const handleViewportChange = useCallback(
+    (v: Viewport) => {
+      viewportRef.current = v;
+      viewportCache.set(flow.id, v);
+    },
+    [flow.id]
+  );
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={initial.edges}
-      nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.4 }}
-      proOptions={{ hideAttribution: true }}
-      nodesDraggable
-      nodesConnectable
-      deleteKeyCode={['Delete', 'Backspace']}
-      onNodesChange={handleNodesChange}
-      onConnect={onConnect}
-      onNodesDelete={handleNodesDelete}
-      onEdgesDelete={handleEdgesDelete}
-      onNodeClick={(_, node) => {
-        if (node.id.startsWith('exit:')) {
-          onSelectNode(null);
-        } else {
-          onSelectNode(node.id);
-        }
-      }}
-      onPaneClick={() => onSelectNode(null)}
-    >
-      <Background variant={BackgroundVariant.Dots} gap={16} size={1.5} color="#3a3d4a" />
-    </ReactFlow>
+    <div className={styles.root} data-popover-host>
+      <div className={styles.canvas}>
+        <ReactFlow
+          nodes={nodes}
+          edges={initial.edges}
+          nodeTypes={nodeTypes}
+          defaultViewport={cachedViewport}
+          fitView={!cachedViewport}
+          fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+          onViewportChange={handleViewportChange}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          nodesConnectable
+          deleteKeyCode={['Delete', 'Backspace']}
+          onNodesChange={handleNodesChange}
+          onConnect={onConnect}
+          onNodesDelete={handleNodesDelete}
+          onEdgesDelete={handleEdgesDelete}
+          onNodeClick={(_, node) => {
+            if (node.id.startsWith('exit:')) {
+              onSelectNode(null);
+            } else {
+              onSelectNode(node.id);
+            }
+          }}
+          onPaneClick={() => onSelectNode(null)}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1.5}
+            color="#3a3d4a"
+          />
+        </ReactFlow>
+        <NodePopover
+          flow={flow}
+          onOpenSource={onOpenSource}
+          onDeleteEdge={onDeleteEdge}
+        />
+      </div>
+    </div>
   );
 }
 
 function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] } {
-  // If the backend has persisted positions (user previously dragged), use
-  // those verbatim. Otherwise fall back to BFS-derived layout.
   const persisted = flow.layout?.nodes ?? {};
 
-  // Compute topological levels via BFS from entry_node (for nodes without
-  // persisted positions, and for exit terminals which are always synthetic).
   const levels = new Map<string, number>();
   if (flow.nodes[flow.entry_node]) {
     levels.set(flow.entry_node, 0);
@@ -154,7 +194,6 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
     ids.forEach((id, idx) => {
       const offset = (idx - (ids.length - 1) / 2) * X_SPACING;
       const exits = Object.keys(flow.nodes[id].exits);
-      // Prefer persisted position from layout; fall back to BFS coordinates.
       const saved = persisted[id];
       const position = saved
         ? { x: saved.x, y: saved.y }
@@ -190,10 +229,10 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
     target: edge.to_node ?? `exit:${edge.to_flow_exit!}`,
     targetHandle: 'in',
     label: edge.from_exit === 'out' ? undefined : edge.from_exit,
-    labelStyle: { fill: '#c9cdd5', fontSize: 11 },
-    labelBgStyle: { fill: '#1a1b23' },
+    labelStyle: { fill: '#c9cdd5', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, monospace' },
+    labelBgStyle: { fill: '#0a0a0a' },
     labelBgPadding: [4, 2] as [number, number],
-    labelBgBorderRadius: 4,
+    labelBgBorderRadius: 2,
     type: 'smoothstep',
     style: { stroke: '#4a4d5a', strokeWidth: 1.3 },
     markerEnd: {

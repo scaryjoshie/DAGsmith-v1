@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import type { Connection } from '@xyflow/react';
 import { FlowGraph } from './components/FlowGraph';
-import { NodePanel } from './components/NodePanel';
-import { RunPanel } from './components/RunPanel';
 import { AddNodeDialog } from './components/AddNodeDialog';
+import { Shell } from './components/Shell';
+import { PaneTree } from './components/PaneTree';
+import { LeftSidebar } from './components/LeftSidebar';
+import { SourceTab } from './components/SourceTab';
+import { FloatingRunPanel } from './components/FloatingRunPanel';
+import { TabsProvider, useTabs } from './tabs/TabsProvider';
+import type { Tab } from './tabs/types';
 import {
   addEdge,
   deleteEdge,
@@ -17,7 +22,6 @@ import {
 import type { FlowView, LayoutPositions, WorkspaceView } from './types';
 import styles from './App.module.css';
 
-// Default workspace name; override via URL param ?workspace=...
 const DEFAULT_WORKSPACE = 'examples.minimal';
 const LAYOUT_DEBOUNCE_MS = 500;
 
@@ -34,47 +38,71 @@ function writeWorkspaceToURL(name: string): void {
 
 export default function App() {
   const [workspaceName, setWorkspaceName] = useState(readWorkspaceFromURL);
+  return (
+    <TabsProvider workspace={workspaceName}>
+      <AppInner
+        workspaceName={workspaceName}
+        setWorkspaceName={setWorkspaceName}
+      />
+    </TabsProvider>
+  );
+}
+
+interface AppInnerProps {
+  workspaceName: string;
+  setWorkspaceName: (name: string) => void;
+}
+
+function AppInner({ workspaceName, setWorkspaceName }: AppInnerProps) {
+  const { openTab, state: tabsState, closeTab } = useTabs();
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceView[]>([]);
-  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [flow, setFlow] = useState<FlowView | null>(null);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [, setSelectedNode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [runPanelOpen, setRunPanelOpen] = useState(false);
 
   const pendingLayoutRef = useRef<LayoutPositions | null>(null);
   const layoutTimerRef = useRef<number | null>(null);
 
-  // Fetch the list of workspaces the backend knows about.
+  // Drive `flow` (the FlowView currently rendered) from the active tab.
+  const activeFlowId = activeFlowIdFromTabs(tabsState);
+
   useEffect(() => {
     let cancelled = false;
     listWorkspaces()
       .then((list) => {
         if (!cancelled) setAllWorkspaces(list.workspaces);
       })
-      .catch(() => {
-        // ignore — fallback is the URL-param workspace
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Load workspace metadata whenever the active workspace changes.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        const pane = findPane(tabsState.root, tabsState.activePaneId);
+        if (pane?.kind === 'leaf' && pane.activeTabId) {
+          e.preventDefault();
+          closeTab(pane.id, pane.activeTabId);
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tabsState, closeTab]);
+
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
     setFlow(null);
-    setSelectedFlowId(null);
     getWorkspace(workspaceName)
       .then((ws) => {
         if (cancelled) return;
         setWorkspace(ws);
-        if (ws.flow_ids.length > 0) {
-          setSelectedFlowId(ws.flow_ids[0]);
-        }
-        // Ensure this workspace is in the dropdown list.
         setAllWorkspaces((prev) =>
           prev.some((w) => w.name === ws.name) ? prev : [...prev, ws]
         );
@@ -94,13 +122,23 @@ export default function App() {
     setWorkspaceName(newName);
   }
 
-  // Load flow details when selection changes.
+  // Auto-open the first flow when a workspace lands with no tabs yet.
   useEffect(() => {
-    if (!selectedFlowId || !workspace) return;
+    if (!workspace || workspace.flow_ids.length === 0) return;
+    if (countLeafTabs(tabsState) > 0) return;
+    const firstId = workspace.flow_ids[0];
+    openTab({ kind: 'flow', flow_id: firstId, title: firstId });
+  }, [workspace, tabsState, openTab]);
+
+  // Load the flow view whenever the active tab changes.
+  useEffect(() => {
+    if (!workspace || !activeFlowId) {
+      setFlow(null);
+      return;
+    }
     let cancelled = false;
     setSelectedNode(null);
-    setEditMode(false);
-    getFlow(workspace.name, selectedFlowId)
+    getFlow(workspace.name, activeFlowId)
       .then((f) => {
         if (!cancelled) setFlow(f);
       })
@@ -110,25 +148,17 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFlowId, workspace]);
-
-  // Exit edit mode whenever the user selects a different node.
-  useEffect(() => {
-    setEditMode(false);
-  }, [selectedNode]);
+  }, [activeFlowId, workspace]);
 
   const refetchFlow = useCallback(async () => {
-    if (!workspace || !selectedFlowId) return;
+    if (!workspace || !activeFlowId) return;
     try {
-      const f = await getFlow(workspace.name, selectedFlowId);
+      const f = await getFlow(workspace.name, activeFlowId);
       setFlow(f);
     } catch (e) {
       setLoadError((e as Error).message);
     }
-  }, [workspace, selectedFlowId]);
-
-  const handleEnterEditMode = useCallback(() => setEditMode(true), []);
-  const handleExitEditMode = useCallback(() => setEditMode(false), []);
+  }, [workspace, activeFlowId]);
 
   const handleConnect = useCallback(
     async (connection: Connection) => {
@@ -155,21 +185,19 @@ export default function App() {
       if (!workspace || !flow) return;
       const ok = window.confirm(`Delete node '${nodeId}' and its edges?`);
       if (!ok) {
-        // User cancelled — we need to refetch to restore the node React Flow
-        // already removed locally via the delete-key handler.
         await refetchFlow();
         return;
       }
       try {
         const updated = await deleteNode(workspace.name, flow.id, nodeId);
         setFlow(updated);
-        if (selectedNode === nodeId) setSelectedNode(null);
+        setSelectedNode((cur) => (cur === nodeId ? null : cur));
       } catch (e) {
         setLoadError((e as Error).message);
         await refetchFlow();
       }
     },
-    [workspace, flow, refetchFlow, selectedNode]
+    [workspace, flow, refetchFlow]
   );
 
   const handleDeleteEdge = useCallback(
@@ -216,61 +244,32 @@ export default function App() {
     setFlow(updated);
   }, []);
 
-  const selectedNodeView =
-    flow && selectedNode ? flow.nodes[selectedNode] ?? null : null;
+  const handleOpenSource = useCallback(
+    (nodeId: string, split: boolean) => {
+      if (!flow) return;
+      const node = flow.nodes[nodeId];
+      const title = node?.source_path
+        ? (node.source_path.split('/').pop() ?? nodeId)
+        : `${nodeId}.py`;
+      openTab(
+        {
+          kind: 'source',
+          flow_id: flow.id,
+          node_id: nodeId,
+          source_path: node?.source_path ?? undefined,
+          title,
+        },
+        { split: split ? 'right' : null }
+      );
+    },
+    [flow, openTab]
+  );
 
-  return (
-    <div className={styles.root}>
-      <header className={styles.topbar}>
-        <div className={styles.brand}>DAGsmith</div>
-        <div className={styles.spacer} />
-        <label className={styles.selectorLabel}>
-          workspace
-          <select
-            className={styles.select}
-            value={workspaceName}
-            onChange={(e) => handleWorkspaceChange(e.target.value)}
-          >
-            {!allWorkspaces.some((w) => w.name === workspaceName) && (
-              <option value={workspaceName}>{workspaceName}</option>
-            )}
-            {allWorkspaces.map((w) => (
-              <option key={w.name} value={w.name}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {workspace && workspace.flow_ids.length > 0 && (
-          <label className={styles.selectorLabel}>
-            flow
-            <select
-              className={styles.select}
-              value={selectedFlowId ?? ''}
-              onChange={(e) => setSelectedFlowId(e.target.value)}
-            >
-              {workspace.flow_ids.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {workspace && flow && (
-          <button
-            type="button"
-            className={styles.addNodeButton}
-            onClick={() => setShowAddDialog(true)}
-          >
-            + Add node
-          </button>
-        )}
-      </header>
-
-      <div className={styles.main}>
-        <div className={styles.canvas}>
-          {loadError && (
+  const renderTab = useCallback(
+    (tab: Tab) => {
+      if (tab.kind === 'flow') {
+        if (loadError) {
+          return (
             <div className={styles.errorOverlay}>
               <h2>Load error</h2>
               <pre>{loadError}</pre>
@@ -279,8 +278,10 @@ export default function App() {
                 <code>uv run dagsmith ui {workspaceName}</code>
               </p>
             </div>
-          )}
-          {!loadError && flow && (
+          );
+        }
+        if (flow && flow.id === tab.flow_id) {
+          return (
             <FlowGraph
               flow={flow}
               onSelectNode={setSelectedNode}
@@ -288,43 +289,65 @@ export default function App() {
               onDeleteNode={handleDeleteNode}
               onDeleteEdge={handleDeleteEdge}
               onNodePositionChange={handleNodePositionChange}
+              onOpenSource={handleOpenSource}
             />
-          )}
-          {!loadError && !flow && <div className={styles.loading}>loading…</div>}
-        </div>
+          );
+        }
+        return <div className={styles.loading}>loading…</div>;
+      }
+      return (
+        <SourceTab
+          workspace={workspaceName}
+          flowId={tab.flow_id}
+          nodeId={tab.node_id}
+        />
+      );
+    },
+    [
+      loadError,
+      workspaceName,
+      flow,
+      handleConnect,
+      handleDeleteNode,
+      handleDeleteEdge,
+      handleNodePositionChange,
+      handleOpenSource,
+    ]
+  );
 
-        <aside
-          className={
-            editMode ? `${styles.sidebar} ${styles.sidebarWide}` : styles.sidebar
-          }
-        >
-          <div className={styles.sidebarTop}>
-            {selectedNodeView && workspace && flow ? (
-              <NodePanel
-                node={selectedNodeView}
-                workspace={workspace.name}
-                flowId={flow.id}
-                editMode={editMode}
-                onEnterEditMode={handleEnterEditMode}
-                onExitEditMode={handleExitEditMode}
-                onSaveComplete={refetchFlow}
-              />
-            ) : (
-              <div className={styles.sidebarHint}>
-                <p>Click a node to inspect it.</p>
-              </div>
-            )}
-          </div>
-          {!editMode && workspace && flow && (
-            <RunPanel
-              workspace={workspace.name}
-              flowId={flow.id}
-              inputType={flow.input_type}
-            />
-          )}
-        </aside>
-      </div>
+  const sidebar = (
+    <LeftSidebar
+      workspaceName={workspaceName}
+      workspace={workspace}
+      allWorkspaces={allWorkspaces}
+      onWorkspaceChange={handleWorkspaceChange}
+      onRunClick={() => setRunPanelOpen((v) => !v)}
+      onAddNodeClick={() => setShowAddDialog(true)}
+      canRun={!!flow}
+      canAddNode={!!workspace && !!flow}
+    />
+  );
 
+  const canvas = (
+    <>
+      <PaneTree
+        renderTab={renderTab}
+        renderEmpty={() => <span>no tabs open — select a flow to open one</span>}
+      />
+      {runPanelOpen && workspace && flow && (
+        <FloatingRunPanel
+          workspace={workspace.name}
+          flowId={flow.id}
+          inputType={flow.input_type}
+          onClose={() => setRunPanelOpen(false)}
+        />
+      )}
+    </>
+  );
+
+  return (
+    <>
+      <Shell sidebarBody={sidebar} canvas={canvas} />
       {showAddDialog && workspace && flow && (
         <AddNodeDialog
           workspace={workspace.name}
@@ -333,6 +356,40 @@ export default function App() {
           onCreated={handleNodeCreated}
         />
       )}
-    </div>
+    </>
   );
+}
+
+function activeFlowIdFromTabs(
+  state: import('./tabs/types').TabsState
+): string | null {
+  const pane = findPane(state.root, state.activePaneId);
+  if (!pane || pane.kind !== 'leaf') return null;
+  const active = pane.tabs.find((t) => t.id === pane.activeTabId);
+  if (!active) return null;
+  return active.flow_id;
+}
+
+function findPane(
+  pane: import('./tabs/types').Pane,
+  id: string
+): import('./tabs/types').Pane | null {
+  if (pane.id === id) return pane;
+  if (pane.kind === 'split') {
+    return findPane(pane.first, id) ?? findPane(pane.second, id);
+  }
+  return null;
+}
+
+function countLeafTabs(state: import('./tabs/types').TabsState): number {
+  let n = 0;
+  const visit = (p: import('./tabs/types').Pane): void => {
+    if (p.kind === 'leaf') n += p.tabs.length;
+    else {
+      visit(p.first);
+      visit(p.second);
+    }
+  };
+  visit(state.root);
+  return n;
 }

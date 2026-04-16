@@ -1,12 +1,11 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  color: #c9cdd5;
-  font-size: 12px;
-  border-top: 1px solid #2e303a;
-  background: #12141c;
+  gap: 12px;
+  padding: 14px 16px;
+  color: var(--fg-0);
+  font-size: var(--text-sm);
+  background: var(--bg-0);
 }
 
 .header {
@@ -17,71 +16,76 @@
 }
 
 .title {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 500;
   margin: 0;
-  color: #e8eaef;
+  color: var(--fg-0);
+  letter-spacing: -0.01em;
 }
 
 .flowId {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  color: #6a6e7a;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--fg-2);
+  font-size: var(--text-xs);
 }
 
 .label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6a6e7a;
+  color: var(--fg-2);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .typeHint {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  color: #7dd3fc;
+  font-family: var(--font-mono);
+  color: var(--fg-1);
   text-transform: none;
   letter-spacing: 0;
   font-size: 10px;
 }
 
 .textarea {
-  background: #0f1117;
-  border: 1px solid #2e303a;
-  border-radius: 4px;
-  color: #e8eaef;
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  color: var(--fg-0);
   padding: 8px 10px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   resize: vertical;
   outline: none;
 }
 
-.textarea:focus {
-  border-color: #4a4d5a;
+.textarea:focus-visible {
+  border-color: var(--fg-1);
 }
 
 .runButton {
-  background: #3b82f6;
-  border: 1px solid #3b82f6;
-  color: #fff;
-  padding: 8px 12px;
-  font-size: 12px;
+  background: var(--fg-0);
+  border: 1px solid var(--fg-0);
+  color: var(--bg-0);
+  padding: 7px 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: var(--radius-1);
   cursor: pointer;
   text-align: center;
-  transition: background-color 0.15s;
+  letter-spacing: -0.01em;
+  transition: opacity 0.1s ease;
+  align-self: flex-start;
 }
 
 .runButton:hover:not(:disabled) {
-  background: #2563eb;
+  opacity: 0.85;
 }
 
 .runButton:disabled {
-  opacity: 0.6;
+  background: var(--border-1);
+  border-color: var(--border-1);
+  color: var(--fg-3);
   cursor: default;
 }
 
@@ -90,35 +94,35 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px;
-  border-radius: 4px;
-  border: 1px solid #2e303a;
-  background: #0f1117;
+  padding: 10px 12px;
+  border-radius: var(--radius-1);
+  border: 1px solid var(--border-1);
+  background: var(--bg-1);
 }
 
 .error {
-  border-color: #7f1d1d;
-  background: #1a0f0f;
+  border-color: var(--red);
+  background: transparent;
 }
 
 .resultLabel {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6a6e7a;
+  color: var(--fg-2);
 }
 
 .exit {
-  color: #fcd34d;
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--fg-0);
+  font-family: var(--font-mono);
   text-transform: none;
   letter-spacing: 0;
 }
 
 .resultBody {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
-  color: #e8eaef;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-0);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
