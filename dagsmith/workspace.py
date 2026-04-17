@@ -700,4 +700,46 @@ def _validate_flow_structure(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
                 )
             )
 
+        # Type mismatch: source exit type vs. target node input type.
+        # Skip edges to public exits (cross-flow boundary — separate check).
+        # Skip if either node is unknown (already emitted dangling_edge_target).
+        if (
+            edge.to_node is not None
+            and edge.to_node in node_names
+            and edge.from_node in node_names
+        ):
+            source_node = spec.nodes[edge.from_node]
+            target_node = spec.nodes[edge.to_node]
+            source_exit_type = source_node.exits.get(edge.from_exit)
+            target_input_type = target_node.input_type
+            # Only emit when both types are known strings and they differ.
+            # typing.Any on either side is always compatible.
+            if (
+                source_exit_type is not None
+                and source_exit_type != "typing.Any"
+                and target_input_type != "typing.Any"
+                and source_exit_type != target_input_type
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        code="type_mismatch",
+                        message=(
+                            f"flow {flow_id!r}: exit {edge.from_exit!r} of node "
+                            f"{edge.from_node!r} has type {source_exit_type!r} but "
+                            f"target node {edge.to_node!r} expects {target_input_type!r}"
+                        ),
+                        flow_id=flow_id,
+                        node_id=edge.from_node,
+                        edge_index=idx,
+                        detail={
+                            "from_node": edge.from_node,
+                            "from_exit": edge.from_exit,
+                            "source_type": source_exit_type,
+                            "to_node": edge.to_node,
+                            "target_type": target_input_type,
+                        },
+                    )
+                )
+
     return diagnostics

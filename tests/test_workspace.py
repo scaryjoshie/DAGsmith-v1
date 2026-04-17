@@ -810,3 +810,107 @@ class TestTolerantLoad:
         with pytest.raises(WorkspaceError):
             mod._workspace.flow_spec("broken")
         assert mod._workspace.flow_spec("good").entry_node == "t"
+
+
+class TestTypeMismatchDiagnostics:
+    """type_mismatch diagnostic: emitted when exit type != target input type."""
+
+    def test_clean_edge_no_diagnostic(self, tmp_path, make_workspace):
+        mod = make_workspace(
+            tmp_path,
+            "ws_type_clean",
+            flows={
+                "f": {
+                    "nodes": {
+                        "a": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "mymod.Foo"},
+                        },
+                        "b": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "mymod.Foo",
+                            "exits": {"out": "typing.Any"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "a", "from_exit": "out", "to_node": "b"},
+                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
+                    ],
+                    "entry_node": "a",
+                },
+            },
+        )
+        mismatches = [d for d in mod._workspace.diagnostics if d.code == "type_mismatch"]
+        assert mismatches == [], "matching types should not produce type_mismatch"
+
+    def test_mismatched_types_emit_diagnostic(self, tmp_path, make_workspace):
+        mod = make_workspace(
+            tmp_path,
+            "ws_type_mismatch",
+            flows={
+                "f": {
+                    "nodes": {
+                        "a": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "mymod.TypeA"},
+                        },
+                        "b": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "mymod.TypeB",
+                            "exits": {"out": "typing.Any"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "a", "from_exit": "out", "to_node": "b"},
+                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
+                    ],
+                    "entry_node": "a",
+                },
+            },
+        )
+        mismatches = [d for d in mod._workspace.diagnostics if d.code == "type_mismatch"]
+        assert len(mismatches) == 1
+        d = mismatches[0]
+        assert d.severity == "warning"
+        assert d.edge_index == 0
+        assert d.node_id == "a"
+        assert d.detail["source_type"] == "mymod.TypeA"
+        assert d.detail["target_type"] == "mymod.TypeB"
+
+    def test_typing_any_on_either_side_suppresses_diagnostic(self, tmp_path, make_workspace):
+        # typing.Any is always compatible — no diagnostic for Any→concrete or concrete→Any
+        mod = make_workspace(
+            tmp_path,
+            "ws_type_any",
+            flows={
+                "f": {
+                    "nodes": {
+                        "a": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                        "b": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "mymod.SomeType",
+                            "exits": {"out": "typing.Any"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "a", "from_exit": "out", "to_node": "b"},
+                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
+                    ],
+                    "entry_node": "a",
+                },
+            },
+        )
+        mismatches = [d for d in mod._workspace.diagnostics if d.code == "type_mismatch"]
+        assert mismatches == [], "typing.Any source should never produce type_mismatch"
