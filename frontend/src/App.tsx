@@ -121,6 +121,7 @@ export default function App() {
       api.addPanel({
         id: panelId,
         component: 'source',
+        tabComponent: 'source',
         title: nodeId,
         params: { workspaceName: ws, flowId, nodeId },
         position: { referencePanel: flowId, direction: 'right' },
@@ -129,6 +130,7 @@ export default function App() {
       api.addPanel({
         id: panelId,
         component: 'source',
+        tabComponent: 'source',
         title: nodeId,
         params: { workspaceName: ws, flowId, nodeId },
       });
@@ -167,12 +169,25 @@ export default function App() {
     </>
   );
 
+  const handleNodeRenamed = useCallback((oldName: string, newName: string) => {
+    // Update selection to new name and re-fetch flow.
+    setSelectedNode((prev) =>
+      prev && prev.nodeId === oldName ? { ...prev, nodeId: newName } : prev
+    );
+    if (selectedNode) {
+      getFlow(selectedNode.workspaceName, selectedNode.flowId)
+        .then((f) => setSelectedFlow(f))
+        .catch(() => {});
+    }
+  }, [selectedNode]);
+
   const inspector = selectedNode ? (
     <Inspector
       selectedNode={selectedNode}
       flow={selectedFlow}
       onOpenSource={handleOpenSource}
       onDismiss={() => setSelectedNode(null)}
+      onNodeRenamed={handleNodeRenamed}
     />
   ) : undefined;
 

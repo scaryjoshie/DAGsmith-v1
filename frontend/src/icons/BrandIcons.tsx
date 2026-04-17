@@ -1,3 +1,15 @@
+export function FlowIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="1" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="1" y="11" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="9" y="11" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="8" y1="5" x2="4" y2="11" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="8" y1="5" x2="12" y2="11" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 export function PythonIcon({ size = 16 }: { size?: number }) {
   return (
     <svg viewBox="0 0 256 255" width={size} height={size} xmlns="http://www.w3.org/2000/svg">

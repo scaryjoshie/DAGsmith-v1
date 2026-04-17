@@ -1,9 +1,55 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type SerializedDockview } from 'dockview';
+import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type SerializedDockview } from 'dockview';
 import { FlowPanel, type FlowPanelParams } from '../panels/FlowPanel';
 import { SourcePanel } from '../panels/SourcePanel';
+import { FlowIcon, PythonIcon } from '../icons/BrandIcons';
 import type { WorkspaceView } from '../types';
 import styles from './DockviewCanvas.module.css';
+
+function FlowTab({ api }: IDockviewPanelHeaderProps) {
+  return (
+    <div className="dv-default-tab">
+      <div className="dv-default-tab-content">
+        <FlowIcon size={12} />
+        <span style={{ marginLeft: 5 }}>{api.title}</span>
+      </div>
+      <div
+        className="dv-default-tab-action"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={(e) => { e.preventDefault(); api.close(); }}
+      >
+        <svg width="11" height="11" viewBox="0 0 28 28" fill="currentColor">
+          <path d="M2.1 27.3L0 25.2L11.55 13.65L0 2.1L2.1 0L13.65 11.55L25.2 0L27.3 2.1L15.75 13.65L27.3 25.2L25.2 27.3L13.65 15.75L2.1 27.3Z" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function SourceTabHeader({ api }: IDockviewPanelHeaderProps) {
+  return (
+    <div className="dv-default-tab">
+      <div className="dv-default-tab-content">
+        <PythonIcon size={12} />
+        <span style={{ marginLeft: 5 }}>{api.title}</span>
+      </div>
+      <div
+        className="dv-default-tab-action"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={(e) => { e.preventDefault(); api.close(); }}
+      >
+        <svg width="11" height="11" viewBox="0 0 28 28" fill="currentColor">
+          <path d="M2.1 27.3L0 25.2L11.55 13.65L0 2.1L2.1 0L13.65 11.55L25.2 0L27.3 2.1L15.75 13.65L27.3 25.2L25.2 27.3L13.65 15.75L2.1 27.3Z" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+const tabComponents = {
+  flow: FlowTab,
+  source: SourceTabHeader,
+};
 
 interface DockviewCanvasProps {
   workspaceName: string;
@@ -56,6 +102,7 @@ function reconcileStale(api: DockviewApi, workspaceName: string, workspace: Work
     api.addPanel({
       id: firstId,
       component: 'flow',
+      tabComponent: 'flow',
       title: firstId.split('.').pop() ?? firstId,
       params: { workspaceName, flowId: firstId } satisfies FlowPanelParams,
     });
@@ -79,6 +126,7 @@ function restoreOrDefault(api: DockviewApi, workspaceName: string, workspace: Wo
   api.addPanel({
     id: firstId,
     component: 'flow',
+    tabComponent: 'flow',
     title: firstId.split('.').pop() ?? firstId,
     params: { workspaceName, flowId: firstId } satisfies FlowPanelParams,
   });
@@ -132,7 +180,7 @@ export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActiveP
 
   return (
     <div className={`${styles.wrapper} dagsmith-theme`}>
-      <DockviewReact components={components} onReady={onReady} />
+      <DockviewReact components={components} tabComponents={tabComponents} onReady={onReady} />
     </div>
   );
 }
@@ -146,6 +194,7 @@ export function openFlowPanel(api: DockviewApi, workspaceName: string, flowId: s
   api.addPanel({
     id: flowId,
     component: 'flow',
+    tabComponent: 'flow',
     title: flowId.split('.').pop() ?? flowId,
     params: { workspaceName, flowId } satisfies FlowPanelParams,
   });
