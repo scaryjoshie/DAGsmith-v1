@@ -10,6 +10,7 @@ import {
   updateLayout,
 } from '../api';
 import type { FlowView, LayoutPositions } from '../types';
+import type { SourcePanelParams } from './SourcePanel';
 
 export interface FlowPanelParams {
   workspaceName: string;
@@ -18,7 +19,7 @@ export interface FlowPanelParams {
 
 const LAYOUT_DEBOUNCE_MS = 500;
 
-export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
+export function FlowPanel({ params, containerApi }: IDockviewPanelProps<FlowPanelParams>) {
   const { workspaceName, flowId } = params;
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,9 +99,31 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
     }, LAYOUT_DEBOUNCE_MS);
   }, [workspaceName, flowId]);
 
-  const handleOpenSource = useCallback((_nodeId: string, _split: boolean) => {
-    // Source tab wiring deferred to task #5+
-  }, []);
+  const handleOpenSource = useCallback((nodeId: string, split: boolean) => {
+    const panelId = `source:${workspaceName}:${flowId}:${nodeId}`;
+    const existing = containerApi.panels.find((p) => p.id === panelId);
+    if (existing) {
+      existing.api.setActive();
+      return;
+    }
+    const sourcePanelParams: SourcePanelParams = { workspaceName, flowId, nodeId };
+    if (split) {
+      containerApi.addPanel({
+        id: panelId,
+        component: 'source',
+        title: nodeId,
+        params: sourcePanelParams,
+        position: { referencePanel: params.flowId, direction: 'right' },
+      });
+    } else {
+      containerApi.addPanel({
+        id: panelId,
+        component: 'source',
+        title: nodeId,
+        params: sourcePanelParams,
+      });
+    }
+  }, [containerApi, workspaceName, flowId, params.flowId]);
 
   if (loadError) {
     return (

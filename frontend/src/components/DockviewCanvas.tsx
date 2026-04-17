@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type SerializedDockview } from 'dockview';
 import { FlowPanel, type FlowPanelParams } from '../panels/FlowPanel';
+import { SourcePanel } from '../panels/SourcePanel';
 import type { WorkspaceView } from '../types';
 import styles from './DockviewCanvas.module.css';
 
@@ -13,6 +14,7 @@ interface DockviewCanvasProps {
 
 const components = {
   flow: FlowPanel,
+  source: SourcePanel,
 };
 
 const LAYOUT_KEY = (ws: string) => `dagsmith.dockview.${ws}`;
@@ -40,11 +42,32 @@ function loadLayout(workspaceName: string): SerializedDockview | null {
   }
 }
 
+function reconcileStale(api: DockviewApi, workspaceName: string, workspace: WorkspaceView): void {
+  const validIds = new Set(workspace.flow_ids);
+  for (const panel of [...api.panels]) {
+    const p = panel.params as Partial<FlowPanelParams>;
+    // Only reconcile flow panels (source panels have id prefix "source:")
+    if (p.flowId && !p.flowId.startsWith('source:') && !validIds.has(p.flowId)) {
+      api.removePanel(panel);
+    }
+  }
+  if (api.panels.length === 0 && workspace.flow_ids.length > 0) {
+    const firstId = workspace.flow_ids[0];
+    api.addPanel({
+      id: firstId,
+      component: 'flow',
+      title: firstId.split('.').pop() ?? firstId,
+      params: { workspaceName, flowId: firstId } satisfies FlowPanelParams,
+    });
+  }
+}
+
 function restoreOrDefault(api: DockviewApi, workspaceName: string, workspace: WorkspaceView): void {
   const saved = loadLayout(workspaceName);
   if (saved) {
     try {
       api.fromJSON(saved);
+      reconcileStale(api, workspaceName, workspace);
       return;
     } catch {
       localStorage.removeItem(LAYOUT_KEY(workspaceName));
