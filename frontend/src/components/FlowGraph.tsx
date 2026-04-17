@@ -226,8 +226,10 @@ function FlowGraphInner({
             continue;
           }
 
-          // dragging === false: release
+          // dragging === false: release — clear ref synchronously so re-entrant
+          // calls in the same batch don't fire snap twice.
           const pendingTarget = snapTargetRef.current;
+          snapTargetRef.current = null;
           setSnapTargetId(null);
 
           if (pendingTarget) {

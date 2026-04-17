@@ -506,9 +506,15 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
         if not isinstance(layout, dict):
             layout = {}
         if request.nodes:
+            existing_nodes = layout.get("nodes")
+            if not isinstance(existing_nodes, dict):
+                existing_nodes = {}
             layout["nodes"] = {
-                node_name: {"x": pos.x, "y": pos.y}
-                for node_name, pos in request.nodes.items()
+                **existing_nodes,
+                **{
+                    node_name: {"x": pos.x, "y": pos.y}
+                    for node_name, pos in request.nodes.items()
+                },
             }
         if request.exits is not None:
             layout["exits"] = dict(request.exits)
