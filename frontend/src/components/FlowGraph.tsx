@@ -15,7 +15,6 @@ import { PythonIcon } from '../icons/BrandIcons';
 import { WorkflowNode } from '../nodes/WorkflowNode';
 import type { WorkflowNode as WorkflowNodeType } from '../nodes/WorkflowNode';
 import type { FlowView } from '../types';
-import { NodePopover } from './NodePopover';
 import styles from './FlowGraph.module.css';
 
 const nodeTypes = { workflow: WorkflowNode };
@@ -35,7 +34,6 @@ interface FlowGraphProps {
   onDeleteNode: (nodeId: string) => void;
   onDeleteEdge: (fromNode: string, fromExit: string) => void;
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
-  onOpenSource: (nodeId: string, split: boolean) => void;
 }
 
 export function FlowGraph(props: FlowGraphProps) {
@@ -53,7 +51,6 @@ function FlowGraphInner({
   onDeleteNode,
   onDeleteEdge,
   onNodePositionChange,
-  onOpenSource,
 }: FlowGraphProps) {
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
@@ -112,7 +109,7 @@ function FlowGraphInner({
   );
 
   return (
-    <div className={styles.root} data-popover-host>
+    <div className={styles.root}>
       <div className={styles.canvas}>
         <ReactFlow
           nodes={nodes}
@@ -146,11 +143,6 @@ function FlowGraphInner({
             color="#3a3d4a"
           />
         </ReactFlow>
-        <NodePopover
-          flow={flow}
-          onOpenSource={onOpenSource}
-          onDeleteEdge={onDeleteEdge}
-        />
       </div>
     </div>
   );

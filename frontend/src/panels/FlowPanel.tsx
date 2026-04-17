@@ -10,7 +10,7 @@ import {
   updateLayout,
 } from '../api';
 import type { FlowView, LayoutPositions } from '../types';
-import type { SourcePanelParams } from './SourcePanel';
+import { useSelection } from '../SelectionContext';
 
 export interface FlowPanelParams {
   workspaceName: string;
@@ -19,8 +19,9 @@ export interface FlowPanelParams {
 
 const LAYOUT_DEBOUNCE_MS = 500;
 
-export function FlowPanel({ params, containerApi }: IDockviewPanelProps<FlowPanelParams>) {
+export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
   const { workspaceName, flowId } = params;
+  const { onNodeSelect } = useSelection();
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const pendingLayoutRef = useRef<LayoutPositions | null>(null);
@@ -99,31 +100,9 @@ export function FlowPanel({ params, containerApi }: IDockviewPanelProps<FlowPane
     }, LAYOUT_DEBOUNCE_MS);
   }, [workspaceName, flowId]);
 
-  const handleOpenSource = useCallback((nodeId: string, split: boolean) => {
-    const panelId = `source:${workspaceName}:${flowId}:${nodeId}`;
-    const existing = containerApi.panels.find((p) => p.id === panelId);
-    if (existing) {
-      existing.api.setActive();
-      return;
-    }
-    const sourcePanelParams: SourcePanelParams = { workspaceName, flowId, nodeId };
-    if (split) {
-      containerApi.addPanel({
-        id: panelId,
-        component: 'source',
-        title: nodeId,
-        params: sourcePanelParams,
-        position: { referencePanel: params.flowId, direction: 'right' },
-      });
-    } else {
-      containerApi.addPanel({
-        id: panelId,
-        component: 'source',
-        title: nodeId,
-        params: sourcePanelParams,
-      });
-    }
-  }, [containerApi, workspaceName, flowId, params.flowId]);
+  const handleSelectNode = useCallback((nodeId: string | null) => {
+    onNodeSelect(nodeId ? { nodeId, flowId, workspaceName } : null);
+  }, [onNodeSelect, flowId, workspaceName]);
 
   if (loadError) {
     return (
@@ -145,12 +124,11 @@ export function FlowPanel({ params, containerApi }: IDockviewPanelProps<FlowPane
   return (
     <FlowGraph
       flow={flow}
-      onSelectNode={() => {}}
+      onSelectNode={handleSelectNode}
       onConnect={handleConnect}
       onDeleteNode={handleDeleteNode}
       onDeleteEdge={handleDeleteEdge}
       onNodePositionChange={handleNodePositionChange}
-      onOpenSource={handleOpenSource}
     />
   );
 }

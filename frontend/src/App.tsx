@@ -5,9 +5,11 @@ import { Shell } from './components/Shell';
 import { DockviewCanvas, openFlowPanel } from './components/DockviewCanvas';
 import { LeftSidebar } from './components/LeftSidebar';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
+import { Inspector } from './components/Inspector';
+import { SelectionContext, type SelectedNode } from './SelectionContext';
 import type { DockviewApi } from 'dockview';
-import { getWorkspace, listWorkspaces } from './api';
-import type { WorkspaceView } from './types';
+import { getFlow, getWorkspace, listWorkspaces } from './api';
+import type { FlowView, WorkspaceView } from './types';
 import type { FlowPanelParams } from './panels/FlowPanel';
 
 const DEFAULT_WORKSPACE = 'examples.minimal';
@@ -30,6 +32,8 @@ export default function App() {
   const [activeFlow, setActiveFlow] = useState<FlowPanelParams | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
+  const [selectedFlow, setSelectedFlow] = useState<FlowView | null>(null);
   const dockviewApiRef = useRef<DockviewApi | null>(null);
 
   useEffect(() => {
@@ -45,6 +49,8 @@ export default function App() {
     setWorkspace(null);
     setActiveFlow(null);
     setRunPanelOpen(false);
+    setSelectedNode(null);
+    setSelectedFlow(null);
     getWorkspace(workspaceName)
       .then((ws) => {
         if (cancelled) return;
@@ -57,6 +63,23 @@ export default function App() {
     return () => { cancelled = true; };
   }, [workspaceName]);
 
+  // When selectedNode changes, fetch the flow to back the Inspector
+  useEffect(() => {
+    if (!selectedNode) {
+      setSelectedFlow(null);
+      return;
+    }
+    let cancelled = false;
+    getFlow(selectedNode.workspaceName, selectedNode.flowId)
+      .then((f) => { if (!cancelled) setSelectedFlow(f); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedNode]);
+
+  const handleNodeSelect = useCallback((node: SelectedNode | null) => {
+    setSelectedNode(node);
+  }, []);
+
   function handleWorkspaceChange(newName: string): void {
     if (newName === workspaceName) return;
     writeWorkspaceToURL(newName);
@@ -65,6 +88,9 @@ export default function App() {
 
   const handleActivePanelChange = useCallback((params: FlowPanelParams | null) => {
     setActiveFlow(params);
+    // Clear selection when active panel changes
+    setSelectedNode(null);
+    setSelectedFlow(null);
     if (!params) {
       setRunPanelOpen(false);
       setShowAddDialog(false);
@@ -80,6 +106,34 @@ export default function App() {
   const handleApiReady = useCallback((api: DockviewApi) => {
     dockviewApiRef.current = api;
   }, []);
+
+  const handleOpenSource = useCallback((nodeId: string, split: boolean) => {
+    const api = dockviewApiRef.current;
+    if (!api || !activeFlow) return;
+    const { workspaceName: ws, flowId } = activeFlow;
+    const panelId = `source:${ws}:${flowId}:${nodeId}`;
+    const existing = api.panels.find((p) => p.id === panelId);
+    if (existing) {
+      existing.api.setActive();
+      return;
+    }
+    if (split) {
+      api.addPanel({
+        id: panelId,
+        component: 'source',
+        title: nodeId,
+        params: { workspaceName: ws, flowId, nodeId },
+        position: { referencePanel: flowId, direction: 'right' },
+      });
+    } else {
+      api.addPanel({
+        id: panelId,
+        component: 'source',
+        title: nodeId,
+        params: { workspaceName: ws, flowId, nodeId },
+      });
+    }
+  }, [activeFlow]);
 
   const sidebar = (
     <LeftSidebar
@@ -113,9 +167,17 @@ export default function App() {
     </>
   );
 
+  const inspector = (
+    <Inspector
+      selectedNode={selectedNode}
+      flow={selectedFlow}
+      onOpenSource={handleOpenSource}
+    />
+  );
+
   return (
-    <>
-      <Shell sidebarBody={sidebar} canvas={canvas} />
+    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect }}>
+      <Shell sidebarBody={sidebar} canvas={canvas} inspectorBody={inspector} />
       {showAddDialog && activeFlow && (
         <AddNodeDialog
           workspace={activeFlow.workspaceName}
@@ -124,6 +186,6 @@ export default function App() {
           onCreated={() => setShowAddDialog(false)}
         />
       )}
-    </>
+    </SelectionContext.Provider>
   );
 }
