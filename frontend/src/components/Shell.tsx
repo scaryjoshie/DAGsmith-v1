@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import styles from './Shell.module.css';
 
 interface ShellProps {
-  sidebarHeader?: ReactNode;
   sidebarBody?: ReactNode;
-  sidebarFooter?: ReactNode;
   canvas?: ReactNode;
   rightPanel?: ReactNode;
 }
@@ -23,13 +21,7 @@ function readStoredWidth(key: string, defaultVal: number): number {
   return Number.isFinite(n) ? n : defaultVal;
 }
 
-export function Shell({
-  sidebarHeader,
-  sidebarBody,
-  sidebarFooter,
-  canvas,
-  rightPanel,
-}: ShellProps) {
+export function Shell({ sidebarBody, canvas, rightPanel }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, readStoredWidth(SIDEBAR_WIDTH_KEY, 260)))
   );
@@ -105,19 +97,11 @@ export function Shell({
   return (
     <div ref={rootRef} className={styles.root} style={cssVars}>
       <aside className={styles.sidebar}>
-        {sidebarHeader !== undefined ? sidebarHeader : (
-          <div className={styles.sidebarHeader}>
-            <span className={styles.brand}>DAGsmith</span>
-          </div>
-        )}
         <div className={styles.sidebarBody}>
           {sidebarBody !== undefined ? sidebarBody : (
             <div className={styles.sidebarPlaceholder}>sidebar</div>
           )}
         </div>
-        {sidebarFooter !== undefined && (
-          <div className={styles.sidebarFooter}>{sidebarFooter}</div>
-        )}
         <div
           className={isResizingSidebar ? `${styles.sidebarResizer} ${styles.resizing}` : styles.sidebarResizer}
           onMouseDown={handleSidebarResizerDown}

@@ -88,16 +88,7 @@ xyflow supports via drag-box select.
 **Priority: MEDIUM. V1 shipped.**
 
 ### 5a. Behavior when target exit is already bound
-Three options:
-
-| Behavior | Summary |
-|---|---|
-| **Refuse** (current) | Snap rejected; user deletes the edge manually first |
-| **Steal** | Old edge removed; new edge created; old target is left orphaned |
-| **Swap** | Same as steal but also moves old target out of the way |
-| **Modifier-based** | Refuse by default; `Shift+drag` forces steal |
-
-Recommend **Modifier-based**. Default refuse avoids silent data loss; power users can opt in.
+**Decision: Refuse** (current behavior). If the target's exit is already connected, snap is rejected; user deletes the old edge manually first. Revisit if this becomes painful in practice — adding `Shift+drag` to force-replace would be an additive change.
 
 ### 5b. Snap above target's top?
 Currently snaps only to target's *bottom*. Snapping above (reverse direction) complicates the mental model. Leave bottom-only.
@@ -164,6 +155,21 @@ These are out-of-scope for this file but listed for visibility.
 10. M7+ per spec
 
 ---
+
+## Edge color semantics (decided)
+
+Convention for edge stroke color:
+
+| State | Color | Trigger |
+|---|---|---|
+| **Default** | gray (`--border-2` / ~`#6b7080`) | All edges that are well-formed |
+| **Type mismatch** | red (`--severity-blocking`) | Edge's `from_exit` type is incompatible with the `to_node`'s input type. Driven by a backend diagnostic, not by local UI logic. |
+| **Live execution** | green (`--success`, new token) | Only while a Run is actively crossing the edge. Requires the Future-list "Live execution visualization" work — tracer hook already exists per `SPEC.md §5.3 / §12`. Deferred. |
+| **Selected** | blue (`--selection`), thicker stroke + × badge | Edge is user-selected; shows endpoint handles for reroute. |
+
+Rules:
+- These states are mutually exclusive at render time with this precedence: **Selected > Live execution > Type mismatch > Default**.
+- Fan-out, snap-stacked, and other structural variations do NOT change stroke color.
 
 ## Open design questions
 

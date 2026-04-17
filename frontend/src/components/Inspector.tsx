@@ -2,12 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { updateNode } from '../api';
 import type { FlowView } from '../types';
 import { useSelection, type SelectedNode } from '../SelectionContext';
+import { shortName } from '../lib/typeRefs';
 import styles from './Inspector.module.css';
-
-function shortName(typeRef: string): string {
-  const parts = typeRef.split('.');
-  return parts[parts.length - 1] ?? typeRef;
-}
 
 // A single exit pill — name editable, type editable, removable.
 interface ExitPillProps {

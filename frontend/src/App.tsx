@@ -52,10 +52,9 @@ export default function App() {
   const [runPanelOpen, setRunPanelOpen] = useState(false);
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
-  const [selectedFlow, setSelectedFlow] = useState<FlowView | null>(null);
+  // Single source of truth for the active flow's FlowView — used by Inspector, sidebar, and preflight.
   const [activeFlowView, setActiveFlowView] = useState<FlowView | null>(null);
   const dockviewApiRef = useRef<DockviewApi | null>(null);
-
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +71,7 @@ export default function App() {
     setRunPanelOpen(false);
     setPreflightOpen(false);
     setSelectedNode(null);
-    setSelectedFlow(null);
+    setActiveFlowView(null);
     getWorkspace(workspaceName)
       .then((ws) => {
         if (cancelled) return;
@@ -85,19 +84,6 @@ export default function App() {
     return () => { cancelled = true; };
   }, [workspaceName]);
 
-  // When selectedNode changes, fetch the flow to back the Inspector
-  useEffect(() => {
-    if (!selectedNode) {
-      setSelectedFlow(null);
-      return;
-    }
-    let cancelled = false;
-    getFlow(selectedNode.workspaceName, selectedNode.flowId)
-      .then((f) => { if (!cancelled) setSelectedFlow(f); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [selectedNode]);
-
   const handleNodeSelect = useCallback((node: SelectedNode | null) => {
     setSelectedNode(node);
   }, []);
@@ -108,7 +94,7 @@ export default function App() {
     setWorkspaceName(newName);
   }
 
-  // Fetch activeFlowView whenever active panel changes (for sidebar diagnostics).
+  // Fetch activeFlowView whenever active panel changes (sidebar diagnostics + Inspector).
   useEffect(() => {
     if (!activeFlow) { setActiveFlowView(null); return; }
     let cancelled = false;
@@ -118,9 +104,8 @@ export default function App() {
     return () => { cancelled = true; };
   }, [activeFlow]);
 
-  // When FlowPanel refetches (mutation), also refresh activeFlowView.
+  // When FlowPanel reports a mutation, refresh canvas panels and activeFlowView.
   const handleFlowMutatedWithView = useCallback((_workspaceName: string, flowId: string) => {
-    // Notify all panels showing this flowId (split panes).
     for (const entry of flowRefetchRegistry.values()) {
       if (entry.flowId === flowId) entry.refetch();
     }
@@ -145,9 +130,7 @@ export default function App() {
 
   const handleActivePanelChange = useCallback((params: FlowPanelParams | null) => {
     setActiveFlow(params);
-    // Clear selection when active panel changes
     setSelectedNode(null);
-    setSelectedFlow(null);
     if (!params) {
       setRunPanelOpen(false);
       setPreflightOpen(false);
@@ -157,7 +140,6 @@ export default function App() {
 
   const handlePanToNode = useCallback((nodeId: string) => {
     if (!activeFlow) return;
-    // Pan the active panel (first match by flowId).
     for (const entry of panToNodeRegistry.values()) {
       if (entry.flowId === activeFlow.flowId) {
         entry.pan(nodeId);
@@ -206,6 +188,13 @@ export default function App() {
     }
   }, [activeFlow]);
 
+  const handleNodeRenamed = useCallback((oldName: string, newName: string) => {
+    setSelectedNode((prev) =>
+      prev && prev.nodeId === oldName ? { ...prev, nodeId: newName } : prev
+    );
+    // activeFlowView will be refreshed by handleFlowMutatedWithView called from Inspector
+  }, []);
+
   const sidebar = (
     <LeftSidebar
       workspaceName={workspaceName}
@@ -241,32 +230,16 @@ export default function App() {
     </>
   );
 
-  const refetchSelectedFlow = useCallback(() => {
-    if (!selectedNode) return;
-    getFlow(selectedNode.workspaceName, selectedNode.flowId)
-      .then((f) => setSelectedFlow(f))
-      .catch(() => {});
-  }, [selectedNode]);
-
-  const handleNodeRenamed = useCallback((oldName: string, newName: string) => {
-    setSelectedNode((prev) =>
-      prev && prev.nodeId === oldName ? { ...prev, nodeId: newName } : prev
-    );
-    if (selectedNode) {
-      getFlow(selectedNode.workspaceName, selectedNode.flowId)
-        .then((f) => setSelectedFlow(f))
-        .catch(() => {});
-    }
-  }, [selectedNode]);
-
   const inspector = selectedNode ? (
     <Inspector
       selectedNode={selectedNode}
-      flow={selectedFlow}
+      flow={activeFlowView}
       onOpenSource={handleOpenSource}
       onDismiss={() => setSelectedNode(null)}
       onNodeRenamed={handleNodeRenamed}
-      onFlowRefetch={refetchSelectedFlow}
+      onFlowRefetch={() => {
+        if (activeFlow) handleFlowMutatedWithView(activeFlow.workspaceName, activeFlow.flowId);
+      }}
     />
   ) : undefined;
 

@@ -9,34 +9,25 @@
 - **M3**: Permissive loader. All seven §6.4 gaps relaxed. `_BrokenFlow` sentinel; `_resolve_ref_or_sentinel` returns `UnresolvableRef` (with `syntax_error` discriminated from `unresolved_ref`); shape diagnostics emitted; `WorkspaceRegistry` extracted.
 - **M4**: `dagsmith/server/` package (app, registry, mutations, introspection, types_palette, schemas, _helpers, routes_read/mutate/run/introspect). New endpoints: types palette, group CRUD, per-flow + workspace diagnostics, flow tree. Diagnostics included in `FlowView` and mutation responses.
 
-### Frontend (uncommitted working tree — NEEDS COMMIT)
+### Frontend (current state — committed on feat/subflows-chains-ui)
 
-**At the "pre-dockview good state":**
 - Vercel design tokens in `src/index.css` (black bg, thin borders, mono, sharp corners)
-- IDE shell (`Shell.tsx` + `Shell.module.css`): left sidebar + canvas area
-- `LeftSidebar` with Workspace / Flows / Types / Diagnostics sections + pinned Run & Add node
-- Top tab bar (`TabBar.tsx`) with dnd-kit sortable tabs + context menu (Split right / Split down / Close)
-- `PaneTree` renders nested split panes
-- `TabsProvider` + `reducer` with `mapPanes` early-out (fixes split-tab stack overflow), localStorage persistence, split keeps origin tab (doesn't move it)
-- `FlowGraph` wrapped in `<ReactFlowProvider>` per-instance, viewport cache per flow_id, brighter grid + edges than the aesthetic-pass version
-- `WorkflowNode` has the **switcher strip** at the bottom for multi-exit nodes (cells with per-exit labels + handles — no more overlapping labels)
-- `NodePopover` on canvas selection: kind chip, input, ref, exits, "Open source →"
-- `SourceTab` (read-only CodeMirror)
-- `FloatingRunPanel` overlay
-- `AddNodeDialog` simplified to one name field, Enter to create (backend defaults the rest)
+- IDE shell (`Shell.tsx`): left sidebar + canvas area + optional right inspector panel (3-column grid)
+- `LeftSidebar` with Workspace / Flows / Types / Diagnostics sections
+- **Dockview** (`DockviewCanvas.tsx`) for multi-tab split-pane canvas — layout persisted per workspace in localStorage
+- `FlowPanel` keyed by dockview `panelApi.id`; `flowRefetchRegistry` + `panToNodeRegistry` keyed the same way (avoids split-pane stomping)
+- `FlowGraph` wrapped in `<ReactFlowProvider>` per-instance, viewport cache per flow_id
+- `WorkflowNode` has the **switcher strip** at the bottom for multi-exit nodes
+- `Inspector` in right sidebar: shows diagnostics badge, node fields, rename/ref/exit actions
+- `RunPreflightModal`: errors block run, warnings show confirm dialog, clean → direct run
+- `Toast` component for transient error feedback (no canvas-blocking banners)
+- `AddNodeDialog` simplified to one name field, Enter to create
 - `vite.config.ts` has `resolve.dedupe` + `resolve.alias` + `optimizeDeps.include` for `@dnd-kit/*` (fixes invalid-hook-call under React 19 Vite HMR)
 
-**Deliberately NOT at this state (these came later and broke things):**
-- `flowCache` multi-flow state (each tab fetches its own flow independently)
-- Per-instance tab IDs (same flow can appear in multiple panes)
-- dockview migration (attempted, rolled back)
-- Frontend Ctrl/Cmd+W keybinding + focus-visible rings (cheap to add if wanted)
+### Known limitations
 
-### Known limitations at the current frontend state
-
-- **Single-tab split is a visual no-op.** `split` action removes the tab from origin, new pane gets it, origin collapses. Need 2+ tabs open before split shows two panes. Fix requires rethinking split semantics.
-- **Stale tab on workspace switch.** Tabs saved per-workspace in localStorage but if you switch workspace and a flow with the same ID doesn't exist there, you see a "loading…" forever. Known.
-- `classify` auto-layout packs the 3 exit pills horizontally, tight but not overlapping anymore.
+- **Stale tab on workspace switch.** If you switch workspace and a flow with the same ID doesn't exist there, the panel shows "loading…" forever. Known.
+- `classify` auto-layout packs the 3 exit pills horizontally, tight but not overlapping.
 
 ## Working method (non-negotiable)
 

@@ -156,7 +156,7 @@ export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActiveP
         if (api) saveLayout(api, workspaceNameRef.current);
       }, DEBOUNCE_MS);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps — intentional mount-once; all deps accessed via refs
   }, []);
 
   // When workspace changes: clear canvas, restore saved layout (or open first flow).
@@ -174,8 +174,8 @@ export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActiveP
     workspaceNameRef.current = workspaceName;
     api.clear();
     restoreOrDefault(api, workspaceName, workspace);
-  // workspace object identity changes on each load; workspaceName drives the key effect
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // workspace object identity changes on each fetch; workspaceName string drives the actual key
+  // eslint-disable-next-line react-hooks/exhaustive-deps — workspace included to trigger on data arrival; workspaceName excluded to avoid double-run
   }, [workspace]);
 
   return (

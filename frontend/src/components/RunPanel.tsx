@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { runFlow } from '../api';
 import type { RunResponse } from '../types';
+import { shortName } from '../lib/typeRefs';
 import styles from './RunPanel.module.css';
 
 interface RunPanelProps {
@@ -86,7 +87,3 @@ export function RunPanel({ workspace, flowId, inputType }: RunPanelProps) {
   );
 }
 
-function shortName(typeRef: string): string {
-  const parts = typeRef.split('.');
-  return parts[parts.length - 1] ?? typeRef;
-}
