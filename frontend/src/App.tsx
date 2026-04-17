@@ -25,6 +25,15 @@ function writeWorkspaceToURL(name: string): void {
   window.history.replaceState(null, '', url.toString());
 }
 
+// Registry of refetch callbacks keyed by flowId — FlowPanel registers on mount.
+type FlowRefetchRegistry = Map<string, () => void>;
+const flowRefetchRegistry: FlowRefetchRegistry = new Map();
+
+export function registerFlowRefetch(flowId: string, refetch: () => void): () => void {
+  flowRefetchRegistry.set(flowId, refetch);
+  return () => flowRefetchRegistry.delete(flowId);
+}
+
 export default function App() {
   const [workspaceName, setWorkspaceName] = useState(readWorkspaceFromURL);
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
@@ -35,6 +44,10 @@ export default function App() {
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<FlowView | null>(null);
   const dockviewApiRef = useRef<DockviewApi | null>(null);
+
+  const handleFlowMutated = useCallback((_workspaceName: string, flowId: string) => {
+    flowRefetchRegistry.get(flowId)?.();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,7 +212,7 @@ export default function App() {
   ) : undefined;
 
   return (
-    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect }}>
+    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutated }}>
       <Shell sidebarBody={sidebar} canvas={canvas} bottomPanel={inspector} />
       {showAddDialog && activeFlow && (
         <AddNodeDialog

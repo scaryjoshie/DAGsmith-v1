@@ -15,11 +15,27 @@
     }
   },
   "edges": [
-    {"from_node": "greet", "from_exit": "formal", "to_flow_exit": "formal"},
-    {"from_node": "greet", "from_exit": "casual", "to_flow_exit": "casual"}
+    {
+      "from_node": "greet",
+      "from_exit": "formal",
+      "to_flow_exit": "formal"
+    },
+    {
+      "from_node": "greet",
+      "from_exit": "casual",
+      "to_flow_exit": "casual"
+    }
   ],
   "public_exits": {
     "formal": "examples.minimal.hello.types.records.Reply",
     "casual": "examples.minimal.hello.types.records.Reply"
+  },
+  "layout": {
+    "nodes": {
+      "greet": {
+        "x": 235.0,
+        "y": -159.5
+      }
+    }
   }
 }

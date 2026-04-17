@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { updateNode } from '../api';
 import type { FlowView } from '../types';
-import type { SelectedNode } from '../SelectionContext';
+import { useSelection, type SelectedNode } from '../SelectionContext';
 import styles from './Inspector.module.css';
 
 interface InspectorProps {
@@ -25,6 +25,7 @@ interface EditFieldProps {
 }
 
 function EditField({ value, original, busy, error, ariaLabel, onChange, onCommit, onRollback }: EditFieldProps) {
+  const cancelledRef = useRef(false);
   return (
     <input
       className={error ? `${styles.editInput} ${styles.editInputError}` : styles.editInput}
@@ -32,10 +33,10 @@ function EditField({ value, original, busy, error, ariaLabel, onChange, onCommit
       disabled={busy}
       title={error ?? original}
       onChange={(e) => onChange(e.target.value)}
-      onBlur={onCommit}
+      onBlur={() => { if (!cancelledRef.current) { onCommit(); } cancelledRef.current = false; }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') { e.currentTarget.blur(); }
-        else if (e.key === 'Escape') { onRollback(); e.currentTarget.blur(); }
+        else if (e.key === 'Escape') { cancelledRef.current = true; onRollback(); e.currentTarget.blur(); }
       }}
       aria-label={ariaLabel}
       spellCheck={false}
@@ -51,6 +52,7 @@ export function Inspector({
   onNodeRenamed,
   onFlowRefetch,
 }: InspectorProps) {
+  const { onFlowMutated } = useSelection();
   const node = flow?.nodes[selectedNode.nodeId];
 
   const [nameValue, setNameValue] = useState('');
@@ -66,6 +68,7 @@ export function Inspector({
   const [inputError, setInputError] = useState<string | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const nameCancelledRef = useRef(false);
 
   useEffect(() => {
     setNameValue(node?.name ?? selectedNode.nodeId);
@@ -94,6 +97,7 @@ export function Inspector({
   }, [onDismiss]);
 
   async function commitName() {
+    if (nameCancelledRef.current) { nameCancelledRef.current = false; return; }
     const trimmed = nameValue.trim();
     if (!trimmed || trimmed === selectedNode.nodeId) {
       setNameValue(selectedNode.nodeId);
@@ -104,6 +108,7 @@ export function Inspector({
     setNameError(null);
     try {
       await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { new_name: trimmed });
+      onFlowMutated(selectedNode.workspaceName, selectedNode.flowId);
       onNodeRenamed(selectedNode.nodeId, trimmed);
     } catch (err) {
       setNameError(err instanceof Error ? err.message : String(err));
@@ -125,6 +130,7 @@ export function Inspector({
     setRefError(null);
     try {
       await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { ref: trimmed });
+      onFlowMutated(selectedNode.workspaceName, selectedNode.flowId);
       onFlowRefetch();
     } catch (err) {
       setRefError(err instanceof Error ? err.message : String(err));
@@ -146,6 +152,7 @@ export function Inspector({
     setInputError(null);
     try {
       await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { input: trimmed });
+      onFlowMutated(selectedNode.workspaceName, selectedNode.flowId);
       onFlowRefetch();
     } catch (err) {
       setInputError(err instanceof Error ? err.message : String(err));
@@ -181,7 +188,12 @@ export function Inspector({
           onBlur={commitName}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.currentTarget.blur(); }
-            else if (e.key === 'Escape') { setNameValue(selectedNode.nodeId); setNameError(null); e.currentTarget.blur(); }
+            else if (e.key === 'Escape') {
+              nameCancelledRef.current = true;
+              setNameValue(selectedNode.nodeId);
+              setNameError(null);
+              e.currentTarget.blur();
+            }
           }}
           aria-label="Node name"
           spellCheck={false}

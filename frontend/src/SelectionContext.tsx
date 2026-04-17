@@ -9,11 +9,13 @@ export interface SelectedNode {
 export interface SelectionContextValue {
   selectedNode: SelectedNode | null;
   onNodeSelect: (node: SelectedNode | null) => void;
+  onFlowMutated: (workspaceName: string, flowId: string) => void;
 }
 
 export const SelectionContext = createContext<SelectionContextValue>({
   selectedNode: null,
   onNodeSelect: () => {},
+  onFlowMutated: () => {},
 });
 
 export function useSelection(): SelectionContextValue {
