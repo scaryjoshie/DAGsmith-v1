@@ -36,7 +36,7 @@
   flex-shrink: 0;
 }
 
-.nameInput {
+.editInput {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -51,21 +51,21 @@
   transition: border-color 0.1s ease, background 0.1s ease;
 }
 
-.nameInput:hover {
+.editInput:hover {
   border-color: var(--border-1);
 }
 
-.nameInput:focus {
+.editInput:focus {
   border-color: var(--border-2);
   background: var(--bg-1);
 }
 
-.nameInput:disabled {
+.editInput:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.nameInputError {
+.editInputError {
   border-color: #e05252 !important;
 }
 
@@ -86,8 +86,9 @@
   padding: 0 12px;
   height: 100%;
   border-right: 1px solid var(--border-0);
-  min-width: 0;
-  flex-shrink: 0;
+  min-width: 80px;
+  max-width: 240px;
+  flex-shrink: 1;
 }
 
 .fieldLabel {
@@ -98,20 +99,6 @@
   flex-shrink: 0;
 }
 
-.typeRef,
-.refValue {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-1);
-  background: var(--bg-0);
-  padding: 2px 6px;
-  border-radius: var(--radius-1);
-  border: 1px solid var(--border-0);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-}
 
 .exitPills {
   display: flex;

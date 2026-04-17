@@ -149,8 +149,10 @@ class GroupCreateRequest(BaseModel):
     label: str = ""
 
 
-class RenameNodeRequest(BaseModel):
-    new_name: str
+class UpdateNodeRequest(BaseModel):
+    new_name: str | None = None
+    ref: str | None = None
+    input: str | None = None
 
 
 class DiagnosticsResponse(BaseModel):

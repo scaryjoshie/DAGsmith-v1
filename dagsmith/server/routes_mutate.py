@@ -21,7 +21,7 @@ from .schemas import (
     DeleteEdgeRequest,
     FlowView,
     GroupCreateRequest,
-    RenameNodeRequest,
+    UpdateNodeRequest,
     UpdateLayoutRequest,
     UpdateLayoutResponse,
     UpdateSourceRequest,
@@ -192,12 +192,9 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
         "/api/workspaces/{name}/flows/{flow_id}/nodes/{node_name}",
         response_model=FlowView,
     )
-    def rename_node(
-        name: str, flow_id: str, node_name: str, request: RenameNodeRequest
+    def update_node(
+        name: str, flow_id: str, node_name: str, request: UpdateNodeRequest
     ) -> FlowView:
-        new_name = request.new_name.strip()
-        if not new_name:
-            raise HTTPException(status_code=400, detail="new_name must not be empty")
         ws = get_or_404(registry, name)
         path, data = read_flow_json(ws, flow_id)
 
@@ -207,36 +204,67 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                 status_code=404,
                 detail=f"node {node_name!r} not found in flow {flow_id!r}",
             )
-        if new_name == node_name:
+
+        node_entry = nodes[node_name]
+        if not isinstance(node_entry, dict):
+            raise HTTPException(status_code=500, detail=f"node entry for {node_name!r} is malformed")
+
+        dirty = False
+
+        # Apply ref update.
+        if request.ref is not None:
+            new_ref = request.ref.strip()
+            if not new_ref:
+                raise HTTPException(status_code=400, detail="ref must not be empty")
+            node_entry["ref"] = new_ref
+            dirty = True
+
+        # Apply input type update.
+        if request.input is not None:
+            new_input = request.input.strip()
+            if not new_input:
+                raise HTTPException(status_code=400, detail="input must not be empty")
+            node_entry["input"] = new_input
+            dirty = True
+
+        # Apply rename — must come last so ref/input patches use the original key.
+        effective_name = node_name
+        if request.new_name is not None:
+            new_name = request.new_name.strip()
+            if not new_name:
+                raise HTTPException(status_code=400, detail="new_name must not be empty")
+            if new_name != node_name:
+                if new_name in nodes:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"node {new_name!r} already exists in flow {flow_id!r}",
+                    )
+                nodes[new_name] = nodes.pop(node_name)
+                data["nodes"] = nodes
+                effective_name = new_name
+
+                if data.get("entry_node") == node_name:
+                    data["entry_node"] = new_name
+
+                edges = data.get("edges")
+                if isinstance(edges, list):
+                    for edge in edges:
+                        if not isinstance(edge, dict):
+                            continue
+                        if edge.get("from_node") == node_name:
+                            edge["from_node"] = new_name
+                        if edge.get("to_node") == node_name:
+                            edge["to_node"] = new_name
+
+                layout = data.get("layout")
+                if isinstance(layout, dict):
+                    layout_nodes = layout.get("nodes")
+                    if isinstance(layout_nodes, dict) and node_name in layout_nodes:
+                        layout_nodes[new_name] = layout_nodes.pop(node_name)
+                dirty = True
+
+        if not dirty:
             return build_flow_view(ws, flow_id)
-        if new_name in nodes:
-            raise HTTPException(
-                status_code=400,
-                detail=f"node {new_name!r} already exists in flow {flow_id!r}",
-            )
-
-        # Rename key in nodes dict preserving insertion order.
-        nodes[new_name] = nodes.pop(node_name)
-        data["nodes"] = nodes
-
-        if data.get("entry_node") == node_name:
-            data["entry_node"] = new_name
-
-        edges = data.get("edges")
-        if isinstance(edges, list):
-            for edge in edges:
-                if not isinstance(edge, dict):
-                    continue
-                if edge.get("from_node") == node_name:
-                    edge["from_node"] = new_name
-                if edge.get("to_node") == node_name:
-                    edge["to_node"] = new_name
-
-        layout = data.get("layout")
-        if isinstance(layout, dict):
-            layout_nodes = layout.get("nodes")
-            if isinstance(layout_nodes, dict) and node_name in layout_nodes:
-                layout_nodes[new_name] = layout_nodes.pop(node_name)
 
         write_flow_json(path, data)
         reload_or_500(registry, name)

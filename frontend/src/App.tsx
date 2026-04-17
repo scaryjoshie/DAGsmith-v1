@@ -169,8 +169,14 @@ export default function App() {
     </>
   );
 
+  const refetchSelectedFlow = useCallback(() => {
+    if (!selectedNode) return;
+    getFlow(selectedNode.workspaceName, selectedNode.flowId)
+      .then((f) => setSelectedFlow(f))
+      .catch(() => {});
+  }, [selectedNode]);
+
   const handleNodeRenamed = useCallback((oldName: string, newName: string) => {
-    // Update selection to new name and re-fetch flow.
     setSelectedNode((prev) =>
       prev && prev.nodeId === oldName ? { ...prev, nodeId: newName } : prev
     );
@@ -188,6 +194,7 @@ export default function App() {
       onOpenSource={handleOpenSource}
       onDismiss={() => setSelectedNode(null)}
       onNodeRenamed={handleNodeRenamed}
+      onFlowRefetch={refetchSelectedFlow}
     />
   ) : undefined;
 

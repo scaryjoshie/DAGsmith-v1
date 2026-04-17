@@ -109,18 +109,24 @@ export function deleteNode(
   );
 }
 
-export function renameNode(
+export interface UpdateNodePayload {
+  new_name?: string;
+  ref?: string;
+  input?: string;
+}
+
+export function updateNode(
   workspace: string,
   flowId: string,
   nodeName: string,
-  newName: string
+  payload: UpdateNodePayload
 ): Promise<FlowView> {
   return request<FlowView>(
     `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeName)}`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ new_name: newName }),
+      body: JSON.stringify(payload),
     }
   );
 }

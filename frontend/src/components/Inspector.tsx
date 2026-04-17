@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { renameNode } from '../api';
+import { updateNode } from '../api';
 import type { FlowView } from '../types';
 import type { SelectedNode } from '../SelectionContext';
 import styles from './Inspector.module.css';
@@ -10,24 +10,81 @@ interface InspectorProps {
   onOpenSource: (nodeId: string, split: boolean) => void;
   onDismiss: () => void;
   onNodeRenamed: (oldName: string, newName: string) => void;
+  onFlowRefetch: () => void;
 }
 
-export function Inspector({ selectedNode, flow, onOpenSource, onDismiss, onNodeRenamed }: InspectorProps) {
-  const node = flow?.nodes[selectedNode.nodeId];
-  const [renameValue, setRenameValue] = useState('');
-  const [renaming, setRenaming] = useState(false);
-  const [renameError, setRenameError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+interface EditFieldProps {
+  value: string;
+  original: string;
+  busy: boolean;
+  error: string | null;
+  ariaLabel: string;
+  onChange: (v: string) => void;
+  onCommit: () => void;
+  onRollback: () => void;
+}
 
-  // Sync rename field with node name changes
+function EditField({ value, original, busy, error, ariaLabel, onChange, onCommit, onRollback }: EditFieldProps) {
+  return (
+    <input
+      className={error ? `${styles.editInput} ${styles.editInputError}` : styles.editInput}
+      value={value}
+      disabled={busy}
+      title={error ?? original}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onCommit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.currentTarget.blur(); }
+        else if (e.key === 'Escape') { onRollback(); e.currentTarget.blur(); }
+      }}
+      aria-label={ariaLabel}
+      spellCheck={false}
+    />
+  );
+}
+
+export function Inspector({
+  selectedNode,
+  flow,
+  onOpenSource,
+  onDismiss,
+  onNodeRenamed,
+  onFlowRefetch,
+}: InspectorProps) {
+  const node = flow?.nodes[selectedNode.nodeId];
+
+  const [nameValue, setNameValue] = useState('');
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  const [refValue, setRefValue] = useState('');
+  const [refBusy, setRefBusy] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
+
+  const [inputValue, setInputValue] = useState('');
+  const [inputBusy, setInputBusy] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
-    setRenameValue(node?.name ?? selectedNode.nodeId);
-    setRenameError(null);
+    setNameValue(node?.name ?? selectedNode.nodeId);
+    setNameError(null);
   }, [node?.name, selectedNode.nodeId]);
 
   useEffect(() => {
+    setRefValue(node?.ref ?? '');
+    setRefError(null);
+  }, [node?.ref]);
+
+  useEffect(() => {
+    setInputValue(node?.input_type ?? '');
+    setInputError(null);
+  }, [node?.input_type]);
+
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && document.activeElement !== inputRef.current) {
+      if (e.key === 'Escape' && document.activeElement !== nameInputRef.current) {
         e.preventDefault();
         onDismiss();
       }
@@ -36,23 +93,65 @@ export function Inspector({ selectedNode, flow, onOpenSource, onDismiss, onNodeR
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onDismiss]);
 
-  async function commitRename() {
-    const trimmed = renameValue.trim();
+  async function commitName() {
+    const trimmed = nameValue.trim();
     if (!trimmed || trimmed === selectedNode.nodeId) {
-      setRenameValue(selectedNode.nodeId);
-      setRenameError(null);
+      setNameValue(selectedNode.nodeId);
+      setNameError(null);
       return;
     }
-    setRenaming(true);
-    setRenameError(null);
+    setNameBusy(true);
+    setNameError(null);
     try {
-      await renameNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, trimmed);
+      await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { new_name: trimmed });
       onNodeRenamed(selectedNode.nodeId, trimmed);
     } catch (err) {
-      setRenameError(err instanceof Error ? err.message : String(err));
-      setRenameValue(selectedNode.nodeId);
+      setNameError(err instanceof Error ? err.message : String(err));
+      setNameValue(selectedNode.nodeId);
     } finally {
-      setRenaming(false);
+      setNameBusy(false);
+    }
+  }
+
+  async function commitRef() {
+    const trimmed = refValue.trim();
+    const original = node?.ref ?? '';
+    if (!trimmed || trimmed === original) {
+      setRefValue(original);
+      setRefError(null);
+      return;
+    }
+    setRefBusy(true);
+    setRefError(null);
+    try {
+      await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { ref: trimmed });
+      onFlowRefetch();
+    } catch (err) {
+      setRefError(err instanceof Error ? err.message : String(err));
+      setRefValue(original);
+    } finally {
+      setRefBusy(false);
+    }
+  }
+
+  async function commitInput() {
+    const trimmed = inputValue.trim();
+    const original = node?.input_type ?? '';
+    if (!trimmed || trimmed === original) {
+      setInputValue(original);
+      setInputError(null);
+      return;
+    }
+    setInputBusy(true);
+    setInputError(null);
+    try {
+      await updateNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, { input: trimmed });
+      onFlowRefetch();
+    } catch (err) {
+      setInputError(err instanceof Error ? err.message : String(err));
+      setInputValue(original);
+    } finally {
+      setInputBusy(false);
     }
   }
 
@@ -69,19 +168,20 @@ export function Inspector({ selectedNode, flow, onOpenSource, onDismiss, onNodeR
   const isSubflow = node.kind === 'flow';
 
   return (
-    <div className={styles.root} title={renameError ?? undefined}>
+    <div className={styles.root}>
       <div className={styles.identity}>
         <span className={styles.kindChip}>{node.kind}</span>
         <input
-          ref={inputRef}
-          className={renameError ? `${styles.nameInput} ${styles.nameInputError}` : styles.nameInput}
-          value={renameValue}
-          disabled={renaming}
-          onChange={(e) => { setRenameValue(e.target.value); setRenameError(null); }}
-          onBlur={commitRename}
+          ref={nameInputRef}
+          className={nameError ? `${styles.editInput} ${styles.editInputError}` : styles.editInput}
+          value={nameValue}
+          disabled={nameBusy}
+          title={nameError ?? node.name}
+          onChange={(e) => { setNameValue(e.target.value); setNameError(null); }}
+          onBlur={commitName}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.currentTarget.blur(); }
-            else if (e.key === 'Escape') { setRenameValue(selectedNode.nodeId); setRenameError(null); e.currentTarget.blur(); }
+            else if (e.key === 'Escape') { setNameValue(selectedNode.nodeId); setNameError(null); e.currentTarget.blur(); }
           }}
           aria-label="Node name"
           spellCheck={false}
@@ -91,12 +191,30 @@ export function Inspector({ selectedNode, flow, onOpenSource, onDismiss, onNodeR
       <div className={styles.fields}>
         <div className={styles.field}>
           <span className={styles.fieldLabel}>input</span>
-          <code className={styles.typeRef} title={node.input_type}>{shortName(node.input_type)}</code>
+          <EditField
+            value={inputValue}
+            original={node.input_type}
+            busy={inputBusy}
+            error={inputError}
+            ariaLabel="Input type"
+            onChange={(v) => { setInputValue(v); setInputError(null); }}
+            onCommit={commitInput}
+            onRollback={() => { setInputValue(node.input_type); setInputError(null); }}
+          />
         </div>
 
         <div className={styles.field}>
           <span className={styles.fieldLabel}>ref</span>
-          <code className={styles.refValue} title={node.ref}>{node.ref}</code>
+          <EditField
+            value={refValue}
+            original={node.ref}
+            busy={refBusy}
+            error={refError}
+            ariaLabel="Node ref"
+            onChange={(v) => { setRefValue(v); setRefError(null); }}
+            onCommit={commitRef}
+            onRollback={() => { setRefValue(node.ref); setRefError(null); }}
+          />
         </div>
 
         <div className={styles.field}>
