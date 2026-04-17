@@ -85,6 +85,23 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
     }
   }, [workspaceName, flowId, flow, refetchFlow]);
 
+  const handleReconnectEdge = useCallback(async (fromNode: string, fromExit: string, newConnection: Connection) => {
+    if (!flow || !newConnection.source || !newConnection.target) return;
+    try {
+      await deleteEdge(workspaceName, flowId, fromNode, fromExit);
+      const isExitTarget = newConnection.target.startsWith('exit:');
+      setFlow(await addEdge(workspaceName, flowId, {
+        from_node: newConnection.source,
+        from_exit: newConnection.sourceHandle ?? 'out',
+        to_node: isExitTarget ? null : newConnection.target,
+        to_flow_exit: isExitTarget ? newConnection.target.slice('exit:'.length) : null,
+      }));
+    } catch (e) {
+      setLoadError((e as Error).message);
+      await refetchFlow();
+    }
+  }, [workspaceName, flowId, flow, refetchFlow]);
+
   const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
     pendingLayoutRef.current = { ...(pendingLayoutRef.current ?? {}), [nodeId]: { x, y } };
     if (layoutTimerRef.current !== null) window.clearTimeout(layoutTimerRef.current);
@@ -129,6 +146,7 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
       onDeleteNode={handleDeleteNode}
       onDeleteEdge={handleDeleteEdge}
       onNodePositionChange={handleNodePositionChange}
+      onReconnectEdge={handleReconnectEdge}
     />
   );
 }

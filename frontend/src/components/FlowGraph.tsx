@@ -6,6 +6,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  reconnectEdge,
   type Connection,
   type Edge,
   type NodeChange,
@@ -40,6 +41,7 @@ interface FlowGraphProps {
   onDeleteNode: (nodeId: string) => void;
   onDeleteEdge: (fromNode: string, fromExit: string) => void;
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
+  onReconnectEdge: (fromNode: string, fromExit: string, newConnection: Connection) => void;
 }
 
 export function FlowGraph(props: FlowGraphProps) {
@@ -57,9 +59,11 @@ function FlowGraphInner({
   onDeleteNode,
   onDeleteEdge,
   onNodePositionChange,
+  onReconnectEdge,
 }: FlowGraphProps) {
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
+  const [edges, setEdges] = useState<Edge[]>(initial.edges);
   const [snapTargetId, setSnapTargetId] = useState<string | null>(null);
   const snapTargetRef = useRef<string | null>(null);
   snapTargetRef.current = snapTargetId;
@@ -67,6 +71,10 @@ function FlowGraphInner({
   useEffect(() => {
     setNodes(initial.nodes);
   }, [initial.nodes]);
+
+  useEffect(() => {
+    setEdges(initial.edges);
+  }, [initial.edges]);
 
   const findSnapCandidate = useCallback(
     (draggedId: string, dragged: { x: number; y: number }, pool: WorkflowNodeType[]): string | null => {
@@ -162,6 +170,16 @@ function FlowGraphInner({
     [onDeleteEdge],
   );
 
+  const handleReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+      const fromNode = oldEdge.source;
+      const fromExit = (oldEdge.sourceHandle as string | undefined) ?? 'out';
+      onReconnectEdge(fromNode, fromExit, newConnection);
+    },
+    [onReconnectEdge],
+  );
+
   const handleNodesDelete = useCallback(
     (removed: WorkflowNodeType[]) => {
       for (const node of removed) {
@@ -193,13 +211,13 @@ function FlowGraphInner({
 
   const decoratedEdges = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    return initial.edges.map((edge) => {
+    return edges.map((edge) => {
       const source = byId.get(edge.source);
       const target = byId.get(edge.target);
       const hidden = source && target ? isFlushStacked(source, target) : false;
       return hidden ? { ...edge, hidden: true } : edge;
     });
-  }, [nodes, initial.edges]);
+  }, [nodes, edges]);
 
   return (
     <div className={styles.root}>
@@ -222,6 +240,7 @@ function FlowGraphInner({
           onConnect={onConnect}
           onNodesDelete={handleNodesDelete}
           onEdgesDelete={handleEdgesDelete}
+          onReconnect={handleReconnect}
           onNodeClick={(_, node) => {
             if (node.id.startsWith('exit:')) {
               onSelectNode(null);
