@@ -236,12 +236,30 @@ export function Inspector({
 
   const [exitsBusy, setExitsBusy] = useState(false);
   const [showAddExit, setShowAddExit] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
   const nameCancelledRef = useRef(false);
+  const diagPopoverRef = useRef<HTMLDivElement>(null);
 
-  // Reset add-exit row when node changes.
-  useEffect(() => { setShowAddExit(false); }, [selectedNode.nodeId]);
+  const nodeDiags = (flow?.diagnostics ?? []).filter(
+    (d) => d.node_id === selectedNode.nodeId
+  );
+
+  // Reset add-exit row and diag popover when node changes.
+  useEffect(() => { setShowAddExit(false); setDiagOpen(false); }, [selectedNode.nodeId]);
+
+  // Close diag popover on click outside.
+  useEffect(() => {
+    if (!diagOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (diagPopoverRef.current && !diagPopoverRef.current.contains(e.target as Node)) {
+        setDiagOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [diagOpen]);
 
   useEffect(() => {
     setNameValue(node?.name ?? selectedNode.nodeId);
@@ -402,8 +420,29 @@ export function Inspector({
   const exits = Object.entries(node.exits);
   const isSubflow = node.kind === 'flow';
 
+  const worstSeverity = nodeDiags.some(d => d.severity === 'error') ? 'error'
+    : nodeDiags.some(d => d.severity === 'warning') ? 'warning'
+    : nodeDiags.length > 0 ? 'info' : null;
+
   return (
     <div className={styles.root}>
+      {diagOpen && nodeDiags.length > 0 && (
+        <div ref={diagPopoverRef} className={styles.diagPopover}>
+          {nodeDiags.map((d) => (
+            <div key={d.id} className={styles.diagPopoverRow}>
+              <span className={`${styles.diagDot} ${d.severity === 'error' ? styles.diagDotError : d.severity === 'warning' ? styles.diagDotWarn : styles.diagDotInfo}`} />
+              <span className={styles.diagPopoverMsg} title={d.message}>{d.message}</span>
+              {d.source_location && (
+                <span className={styles.diagPopoverLoc}>
+                  {(d.source_location as { file?: string; line?: number }).line != null
+                    ? `line ${(d.source_location as { line: number }).line}`
+                    : ''}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className={styles.identity}>
         <span className={styles.kindChip}>{node.kind}</span>
         <input
@@ -426,6 +465,17 @@ export function Inspector({
           aria-label="Node name"
           spellCheck={false}
         />
+        {worstSeverity && (
+          <button
+            type="button"
+            className={`${styles.diagBadge} ${worstSeverity === 'error' ? styles.diagBadgeError : worstSeverity === 'warning' ? styles.diagBadgeWarn : styles.diagBadgeInfo}`}
+            onClick={() => setDiagOpen((v) => !v)}
+            title={`${nodeDiags.length} diagnostic${nodeDiags.length !== 1 ? 's' : ''}`}
+            aria-label={`${nodeDiags.length} diagnostics`}
+          >
+            ● {nodeDiags.length}
+          </button>
+        )}
       </div>
 
       <div className={styles.fields}>

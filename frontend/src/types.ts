@@ -49,6 +49,7 @@ export interface DiagnosticView {
   node_id: string | null;
   edge_index: number | null;
   derived_from: string | null;
+  source_location: { file?: string; line?: number; col?: number } | null;
 }
 
 export interface FlowView {
