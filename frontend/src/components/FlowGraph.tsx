@@ -8,7 +8,6 @@ import {
   applyNodeChanges,
   reconnectEdge,
   useReactFlow,
-  useStore,
   type Connection,
   type Edge,
   type NodeChange,
@@ -28,7 +27,6 @@ const X_SPACING = 260;
 // Snap tuning.
 const SNAP_VERTICAL_RANGE = 28; // px: how close the dragged node's top must be to a candidate's bottom
 const SNAP_HORIZONTAL_RANGE = 80; // px: how close in x-alignment
-const FLUSH_TOLERANCE = 2; // px: geometric tolerance for "nodes are flush-touching"
 const FALLBACK_NODE_HEIGHT = 40;
 
 // Module-level cache of viewport state per flow_id. Tabs unmount when
@@ -67,32 +65,31 @@ function FlowGraphInner({
   onExitsReorder,
   onReady,
 }: FlowGraphProps) {
-  const { fitView, setCenter, getNode } = useReactFlow();
+  const { setCenter, getNode, getViewport } = useReactFlow();
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
   const [edges, setEdges] = useState<Edge[]>(initial.edges);
   const [snapTargetId, setSnapTargetId] = useState<string | null>(null);
   const snapTargetRef = useRef<string | null>(null);
   snapTargetRef.current = snapTargetId;
-  const prevNodeCountRef = useRef(initial.nodes.length);
-  const [pendingFit, setPendingFit] = useState(false);
-  const nodesInitialized = useStore((s) => s.nodesInitialized);
+  const prevNodeIdsRef = useRef(new Set(initial.nodes.map((n) => n.id)));
 
   useEffect(() => {
-    const newCount = initial.nodes.length;
-    if (newCount > prevNodeCountRef.current) {
-      setPendingFit(true);
-    }
-    prevNodeCountRef.current = newCount;
+    const prevIds = prevNodeIdsRef.current;
+    const newNode = initial.nodes.find((n) => !prevIds.has(n.id));
+    prevNodeIdsRef.current = new Set(initial.nodes.map((n) => n.id));
     setNodes(initial.nodes);
-  }, [initial.nodes]);
-
-  useEffect(() => {
-    if (pendingFit && nodesInitialized) {
-      setPendingFit(false);
-      fitView({ padding: 0.15, maxZoom: 1 });
+    if (newNode) {
+      // Pan to the new node without resetting zoom or moving existing nodes.
+      requestAnimationFrame(() => {
+        const measured = getNode(newNode.id);
+        const nx = measured ?? newNode;
+        const cx = nx.position.x + ((measured?.measured?.width ?? 160) / 2);
+        const cy = nx.position.y + ((measured?.measured?.height ?? FALLBACK_NODE_HEIGHT) / 2);
+        setCenter(cx, cy, { zoom: getViewport().zoom, duration: 300 });
+      });
     }
-  }, [pendingFit, nodesInitialized, fitView]);
+  }, [initial.nodes, getNode, setCenter, getViewport]);
 
   useEffect(() => {
     setEdges(initial.edges);
@@ -248,34 +245,24 @@ function FlowGraphInner({
     return map;
   }, [flow.diagnostics]);
 
-  // Fan-out: map node id → set of exit names with >1 outgoing edge
+  // Fan-out: map node id → { exitName: count } for exits with >1 outgoing edge
   const fanOutMap = useMemo(() => {
     const counts = new Map<string, number>();
     for (const edge of flow.edges) {
       const key = `${edge.from_node}|${edge.from_exit}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const result = new Map<string, Set<string>>();
+    const result = new Map<string, Record<string, number>>();
     for (const [key, count] of counts) {
       if (count < 2) continue;
-      const [nodeId, exitName] = key.split('|');
-      if (!result.has(nodeId)) result.set(nodeId, new Set());
-      result.get(nodeId)!.add(exitName);
+      const sep = key.indexOf('|');
+      const nodeId = key.slice(0, sep);
+      const exitName = key.slice(sep + 1);
+      if (!result.has(nodeId)) result.set(nodeId, {});
+      result.get(nodeId)![exitName] = count;
     }
     return result;
   }, [flow.edges]);
-
-  // Set of edge IDs (by index key) that are fan-out edges
-  const fanOutEdgeKeys = useMemo(() => {
-    const set = new Set<string>();
-    for (const edge of flow.edges) {
-      const key = `${edge.from_node}|${edge.from_exit}`;
-      if (fanOutMap.has(edge.from_node) && fanOutMap.get(edge.from_node)!.has(edge.from_exit)) {
-        set.add(key);
-      }
-    }
-    return set;
-  }, [flow.edges, fanOutMap]);
 
   const decoratedNodes = useMemo(
     () =>
@@ -287,30 +274,13 @@ function FlowGraphInner({
           exitOrder: layoutExits?.[n.id],
           onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
           severity: nodeSeverity.get(n.id) ?? null,
-          fanOutExits: fanOutMap.has(n.id) ? Array.from(fanOutMap.get(n.id)!) : undefined,
+          fanOutCounts: fanOutMap.get(n.id),
         },
       })),
     [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap],
   );
 
-  const decoratedEdges = useMemo(() => {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    return edges.map((edge) => {
-      const source = byId.get(edge.source);
-      const target = byId.get(edge.target);
-      const hidden = source && target ? isFlushStacked(source, target) : false;
-      if (hidden) return { ...edge, hidden: true };
-      const edgeKey = `${edge.source}|${edge.sourceHandle ?? 'out'}`;
-      if (fanOutEdgeKeys.has(edgeKey)) {
-        return {
-          ...edge,
-          style: { stroke: '#c48b2a', strokeWidth: 1.6, strokeDasharray: '5 3' },
-          markerEnd: { type: MarkerType.ArrowClosed, color: '#c48b2a', width: 22, height: 22 },
-        };
-      }
-      return edge;
-    });
-  }, [nodes, edges, fanOutEdgeKeys]);
+  const decoratedEdges = useMemo(() => edges, [edges]);
 
   return (
     <div className={styles.root}>
@@ -353,13 +323,6 @@ function FlowGraphInner({
       </div>
     </div>
   );
-}
-
-function isFlushStacked(source: WorkflowNodeType, target: WorkflowNodeType): boolean {
-  const h = source.measured?.height ?? FALLBACK_NODE_HEIGHT;
-  const dy = Math.abs(target.position.y - (source.position.y + h));
-  const dx = Math.abs(target.position.x - source.position.x);
-  return dy <= FLUSH_TOLERANCE && dx <= FLUSH_TOLERANCE;
 }
 
 function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] } {

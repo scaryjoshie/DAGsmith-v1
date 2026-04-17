@@ -30,11 +30,13 @@
   box-shadow: 0 2px 0 0 var(--selection);
 }
 
-.severityBlocking {
+.process.severityBlocking,
+.process.severityBlocking:hover {
   border-color: var(--severity-blocking);
 }
 
-.severityWarning {
+.process.severityWarning,
+.process.severityWarning:hover {
   border-color: var(--severity-warning);
 }
 
