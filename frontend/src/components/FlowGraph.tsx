@@ -496,6 +496,7 @@ function FlowGraphInner({
             edges={decoratedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ type: 'selectable' }}
             defaultViewport={cachedViewport}
             fitView={!cachedViewport}
             fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
