@@ -423,6 +423,17 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                 detail=f"flow.json 'edges' field is not a JSON array in {path}",
             )
 
+        # Idempotency: return unchanged view if this edge already exists.
+        for existing in edges:
+            if (
+                isinstance(existing, dict)
+                and existing.get("from_node") == request.from_node
+                and existing.get("from_exit") == request.from_exit
+                and existing.get("to_node") == request.to_node
+                and existing.get("to_flow_exit") == request.to_flow_exit
+            ):
+                return build_flow_view(ws, flow_id)
+
         new_edge: dict[str, Any] = {
             "from_node": request.from_node,
             "from_exit": request.from_exit,
