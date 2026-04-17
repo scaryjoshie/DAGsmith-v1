@@ -13,6 +13,7 @@ export type WorkflowNodeData = {
   onExitsReorder?: (newOrder: string[]) => void;
   snapTarget?: boolean;
   severity?: 'blocking' | 'warning' | null;
+  fanOutExits?: string[];
 };
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
@@ -118,19 +119,25 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
           {exits.map((exit, idx) => {
             const isDragging = dragIndex === idx;
             const isDropTarget = dropIndex === idx && dragIndex !== null && dragIndex !== idx;
+            const isFanOut = data.fanOutExits?.includes(exit) ?? false;
             let cellClass = styles.switcherCell;
             if (isDragging) cellClass += ` ${styles.switcherCellDragging}`;
             if (isDropTarget) cellClass += ` ${styles.switcherCellDropTarget}`;
+            if (isFanOut) cellClass += ` ${styles.switcherCellFanOut}`;
             return (
               <div
                 key={exit}
                 className={cellClass}
+                title={isFanOut ? 'fan-out: multiple targets' : undefined}
                 style={data.onExitsReorder ? { cursor: 'grab' } : undefined}
                 onPointerDown={handleCellPointerDown(idx)}
                 onPointerMove={handleCellPointerMove(idx)}
                 onPointerUp={handleCellPointerUp}
               >
-                <span className={styles.switcherLabel}>{exit}</span>
+                <span className={styles.switcherLabel}>
+                  {exit}
+                  {isFanOut && <span className={styles.fanOutGlyph}>⇉</span>}
+                </span>
                 <Handle
                   type="source"
                   position={Position.Bottom}
@@ -142,12 +149,22 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
           })}
         </div>
       ) : (
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          id={exits[0]}
-          className={handleClass}
-        />
+        <>
+          {(data.fanOutExits?.includes(exits[0]) ?? false) && (
+            <div
+              className={styles.fanOutBar}
+              title="fan-out: multiple targets"
+            >
+              <span className={styles.fanOutGlyph}>⇉</span>
+            </div>
+          )}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id={exits[0]}
+            className={handleClass}
+          />
+        </>
       )}
     </div>
   );

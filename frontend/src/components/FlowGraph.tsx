@@ -248,6 +248,35 @@ function FlowGraphInner({
     return map;
   }, [flow.diagnostics]);
 
+  // Fan-out: map node id → set of exit names with >1 outgoing edge
+  const fanOutMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const edge of flow.edges) {
+      const key = `${edge.from_node}|${edge.from_exit}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const result = new Map<string, Set<string>>();
+    for (const [key, count] of counts) {
+      if (count < 2) continue;
+      const [nodeId, exitName] = key.split('|');
+      if (!result.has(nodeId)) result.set(nodeId, new Set());
+      result.get(nodeId)!.add(exitName);
+    }
+    return result;
+  }, [flow.edges]);
+
+  // Set of edge IDs (by index key) that are fan-out edges
+  const fanOutEdgeKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const edge of flow.edges) {
+      const key = `${edge.from_node}|${edge.from_exit}`;
+      if (fanOutMap.has(edge.from_node) && fanOutMap.get(edge.from_node)!.has(edge.from_exit)) {
+        set.add(key);
+      }
+    }
+    return set;
+  }, [flow.edges, fanOutMap]);
+
   const decoratedNodes = useMemo(
     () =>
       nodes.map((n) => ({
@@ -258,9 +287,10 @@ function FlowGraphInner({
           exitOrder: layoutExits?.[n.id],
           onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
           severity: nodeSeverity.get(n.id) ?? null,
+          fanOutExits: fanOutMap.has(n.id) ? Array.from(fanOutMap.get(n.id)!) : undefined,
         },
       })),
-    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity],
+    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap],
   );
 
   const decoratedEdges = useMemo(() => {
@@ -269,9 +299,18 @@ function FlowGraphInner({
       const source = byId.get(edge.source);
       const target = byId.get(edge.target);
       const hidden = source && target ? isFlushStacked(source, target) : false;
-      return hidden ? { ...edge, hidden: true } : edge;
+      if (hidden) return { ...edge, hidden: true };
+      const edgeKey = `${edge.source}|${edge.sourceHandle ?? 'out'}`;
+      if (fanOutEdgeKeys.has(edgeKey)) {
+        return {
+          ...edge,
+          style: { stroke: '#c48b2a', strokeWidth: 1.6, strokeDasharray: '5 3' },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#c48b2a', width: 22, height: 22 },
+        };
+      }
+      return edge;
     });
-  }, [nodes, edges]);
+  }, [nodes, edges, fanOutEdgeKeys]);
 
   return (
     <div className={styles.root}>
