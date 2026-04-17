@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import type { Connection } from '@xyflow/react';
-import { FlowGraph } from './components/FlowGraph';
 import { AddNodeDialog } from './components/AddNodeDialog';
 import { Shell } from './components/Shell';
-import { PaneTree } from './components/PaneTree';
+import { DockviewCanvas } from './components/DockviewCanvas';
 import { LeftSidebar } from './components/LeftSidebar';
-import { SourceTab } from './components/SourceTab';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
 import { TabsProvider, useTabs } from './tabs/TabsProvider';
-import type { Tab } from './tabs/types';
 import {
   addEdge,
   deleteEdge,
@@ -20,7 +17,6 @@ import {
   updateLayout,
 } from './api';
 import type { FlowView, LayoutPositions, WorkspaceView } from './types';
-import styles from './App.module.css';
 
 const DEFAULT_WORKSPACE = 'examples.minimal';
 const LAYOUT_DEBOUNCE_MS = 500;
@@ -265,55 +261,6 @@ function AppInner({ workspaceName, setWorkspaceName }: AppInnerProps) {
     [flow, openTab]
   );
 
-  const renderTab = useCallback(
-    (tab: Tab) => {
-      if (tab.kind === 'flow') {
-        if (loadError) {
-          return (
-            <div className={styles.errorOverlay}>
-              <h2>Load error</h2>
-              <pre>{loadError}</pre>
-              <p className={styles.hint}>
-                Is the backend running?{' '}
-                <code>uv run dagsmith ui {workspaceName}</code>
-              </p>
-            </div>
-          );
-        }
-        if (flow && flow.id === tab.flow_id) {
-          return (
-            <FlowGraph
-              flow={flow}
-              onSelectNode={setSelectedNode}
-              onConnect={handleConnect}
-              onDeleteNode={handleDeleteNode}
-              onDeleteEdge={handleDeleteEdge}
-              onNodePositionChange={handleNodePositionChange}
-              onOpenSource={handleOpenSource}
-            />
-          );
-        }
-        return <div className={styles.loading}>loading…</div>;
-      }
-      return (
-        <SourceTab
-          workspace={workspaceName}
-          flowId={tab.flow_id}
-          nodeId={tab.node_id}
-        />
-      );
-    },
-    [
-      loadError,
-      workspaceName,
-      flow,
-      handleConnect,
-      handleDeleteNode,
-      handleDeleteEdge,
-      handleNodePositionChange,
-      handleOpenSource,
-    ]
-  );
 
   const sidebar = (
     <LeftSidebar
@@ -330,10 +277,17 @@ function AppInner({ workspaceName, setWorkspaceName }: AppInnerProps) {
 
   const canvas = (
     <>
-      <PaneTree
-        renderTab={renderTab}
-        renderEmpty={() => <span>no tabs open — select a flow to open one</span>}
-      />
+      <DockviewCanvas context={{
+        workspaceName,
+        workspace,
+        flow,
+        loadError,
+        onConnect: handleConnect,
+        onDeleteNode: handleDeleteNode,
+        onDeleteEdge: handleDeleteEdge,
+        onNodePositionChange: handleNodePositionChange,
+        onOpenSource: handleOpenSource,
+      }} />
       {runPanelOpen && workspace && flow && (
         <FloatingRunPanel
           workspace={workspace.name}
