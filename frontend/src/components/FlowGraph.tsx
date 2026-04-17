@@ -22,6 +22,12 @@ const nodeTypes = { workflow: WorkflowNode };
 const Y_SPACING = 160;
 const X_SPACING = 260;
 
+// Snap tuning.
+const SNAP_VERTICAL_RANGE = 28; // px: how close the dragged node's top must be to a candidate's bottom
+const SNAP_HORIZONTAL_RANGE = 80; // px: how close in x-alignment
+const FLUSH_TOLERANCE = 2; // px: geometric tolerance for "nodes are flush-touching"
+const FALLBACK_NODE_HEIGHT = 40;
+
 // Module-level cache of viewport state per flow_id. Tabs unmount when
 // inactive, so we restore the viewport on remount to give the illusion of
 // "each tab preserves its own viewport" per SPEC §7.2.
@@ -54,27 +60,95 @@ function FlowGraphInner({
 }: FlowGraphProps) {
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
+  const [snapTargetId, setSnapTargetId] = useState<string | null>(null);
+  const snapTargetRef = useRef<string | null>(null);
+  snapTargetRef.current = snapTargetId;
 
   useEffect(() => {
     setNodes(initial.nodes);
   }, [initial.nodes]);
 
+  const findSnapCandidate = useCallback(
+    (draggedId: string, dragged: { x: number; y: number }, pool: WorkflowNodeType[]): string | null => {
+      for (const candidate of pool) {
+        if (candidate.id === draggedId) continue;
+        if (candidate.id.startsWith('exit:')) continue;
+        const exits = candidate.data.exits;
+        if (!exits || exits.length !== 1) continue;
+        const exitName = exits[0];
+        const alreadyBound = flow.edges.some(
+          (e) => e.from_node === candidate.id && e.from_exit === exitName,
+        );
+        if (alreadyBound) continue;
+
+        const candHeight = candidate.measured?.height ?? FALLBACK_NODE_HEIGHT;
+        const expectedTop = candidate.position.y + candHeight;
+        const expectedLeft = candidate.position.x;
+
+        const dy = Math.abs(dragged.y - expectedTop);
+        const dx = Math.abs(dragged.x - expectedLeft);
+        if (dy < SNAP_VERTICAL_RANGE && dx < SNAP_HORIZONTAL_RANGE) {
+          return candidate.id;
+        }
+      }
+      return null;
+    },
+    [flow.edges],
+  );
+
   const handleNodesChange = useCallback(
     (changes: NodeChange<WorkflowNodeType>[]) => {
-      setNodes((current) => applyNodeChanges(changes, current));
-      for (const change of changes) {
-        if (
-          change.type === 'position' &&
-          change.position &&
-          change.dragging === false
-        ) {
+      setNodes((current) => {
+        const next = applyNodeChanges(changes, current);
+        for (const change of changes) {
+          if (change.type !== 'position' || !change.position) continue;
+
+          if (change.dragging) {
+            if (change.id.startsWith('exit:')) continue;
+            const candidate = findSnapCandidate(change.id, change.position, next);
+            setSnapTargetId(candidate);
+            continue;
+          }
+
+          // dragging === false: release
+          const pendingTarget = snapTargetRef.current;
+          setSnapTargetId(null);
+
+          if (pendingTarget) {
+            const target = next.find((n) => n.id === pendingTarget);
+            if (target) {
+              const h = target.measured?.height ?? FALLBACK_NODE_HEIGHT;
+              const snappedX = target.position.x;
+              const snappedY = target.position.y + h;
+              const idx = next.findIndex((n) => n.id === change.id);
+              if (idx >= 0) {
+                next[idx] = {
+                  ...next[idx],
+                  position: { x: snappedX, y: snappedY },
+                };
+              }
+              const exitName = target.data.exits?.[0] ?? 'out';
+              onConnect({
+                source: target.id,
+                sourceHandle: exitName,
+                target: change.id,
+                targetHandle: 'in',
+              });
+              if (!change.id.startsWith('exit:')) {
+                onNodePositionChange(change.id, snappedX, snappedY);
+              }
+              continue;
+            }
+          }
+
           if (!change.id.startsWith('exit:')) {
             onNodePositionChange(change.id, change.position.x, change.position.y);
           }
         }
-      }
+        return next;
+      });
     },
-    [onNodePositionChange]
+    [findSnapCandidate, onConnect, onNodePositionChange],
   );
 
   const handleEdgesDelete = useCallback(
@@ -85,7 +159,7 @@ function FlowGraphInner({
         onDeleteEdge(fromNode, fromExit);
       }
     },
-    [onDeleteEdge]
+    [onDeleteEdge],
   );
 
   const handleNodesDelete = useCallback(
@@ -95,7 +169,7 @@ function FlowGraphInner({
         onDeleteNode(node.id);
       }
     },
-    [onDeleteNode]
+    [onDeleteNode],
   );
 
   const cachedViewport = viewportCache.get(flow.id);
@@ -105,15 +179,34 @@ function FlowGraphInner({
       viewportRef.current = v;
       viewportCache.set(flow.id, v);
     },
-    [flow.id]
+    [flow.id],
   );
+
+  const decoratedNodes = useMemo(
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        data: { ...n.data, snapTarget: n.id === snapTargetId },
+      })),
+    [nodes, snapTargetId],
+  );
+
+  const decoratedEdges = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    return initial.edges.map((edge) => {
+      const source = byId.get(edge.source);
+      const target = byId.get(edge.target);
+      const hidden = source && target ? isFlushStacked(source, target) : false;
+      return hidden ? { ...edge, hidden: true } : edge;
+    });
+  }, [nodes, initial.edges]);
 
   return (
     <div className={styles.root}>
       <div className={styles.canvas}>
         <ReactFlow
-          nodes={nodes}
-          edges={initial.edges}
+          nodes={decoratedNodes}
+          edges={decoratedEdges}
           nodeTypes={nodeTypes}
           defaultViewport={cachedViewport}
           fitView={!cachedViewport}
@@ -148,6 +241,13 @@ function FlowGraphInner({
       </div>
     </div>
   );
+}
+
+function isFlushStacked(source: WorkflowNodeType, target: WorkflowNodeType): boolean {
+  const h = source.measured?.height ?? FALLBACK_NODE_HEIGHT;
+  const dy = Math.abs(target.position.y - (source.position.y + h));
+  const dx = Math.abs(target.position.x - source.position.x);
+  return dy <= FLUSH_TOLERANCE && dx <= FLUSH_TOLERANCE;
 }
 
 function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] } {

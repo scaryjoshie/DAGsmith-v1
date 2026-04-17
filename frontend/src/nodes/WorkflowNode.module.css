@@ -22,6 +22,12 @@
   box-shadow: 0 0 0 2px var(--selection);
 }
 
+.snapTarget {
+  border-bottom-color: var(--selection) !important;
+  border-bottom-width: 2px;
+  box-shadow: 0 2px 0 0 var(--selection);
+}
+
 .body {
   padding: 10px 14px;
   display: flex;

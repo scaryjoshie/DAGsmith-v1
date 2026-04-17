@@ -9,6 +9,7 @@ export type WorkflowNodeData = {
   iconColor?: string;
   variant?: 'process' | 'terminal';
   exits?: string[];
+  snapTarget?: boolean;
 };
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
@@ -35,9 +36,12 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
 
   const exits = data.exits && data.exits.length > 0 ? data.exits : ['out'];
   const hasSwitcher = exits.length > 1;
+  const processClass = data.snapTarget
+    ? `${styles.process} ${styles.snapTarget}`
+    : styles.process;
 
   return (
-    <div className={styles.process}>
+    <div className={processClass}>
       <Handle type="target" position={Position.Top} id="in" className={styles.handle} />
       <div className={styles.body}>
         {data.icon && (
