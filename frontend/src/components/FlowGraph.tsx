@@ -328,12 +328,12 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
     labelBgPadding: [4, 2] as [number, number],
     labelBgBorderRadius: 2,
     type: 'smoothstep',
-    style: { stroke: '#4a4d5a', strokeWidth: 1.3 },
+    style: { stroke: '#6b7080', strokeWidth: 1.6 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: '#4a4d5a',
-      width: 14,
-      height: 14,
+      color: '#6b7080',
+      width: 22,
+      height: 22,
     },
   }));
 
