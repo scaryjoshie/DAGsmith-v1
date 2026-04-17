@@ -6,7 +6,7 @@
 
 ## Nodes
 
-Nodes are the topology primitives. They appear as boxes in the graph, connected by edges. Each node has a `kind` field.
+Nodes are the topology primitives. They appear as boxes in the graph, connected by edges. Each node has a `kind` field. The current set is `"python" | "flow" | "action"` (action is planned).
 
 ### Python (`kind: "python"`)
 
@@ -26,35 +26,77 @@ A virtual entry node that injects a typed value into the graph without any user-
 
 ### Action (`kind: "action"` — planned)
 
-An action node performs a side effect but does not forward data in the main pipeline. It is invoked via **insertion points** (see below), not via the normal top/bottom data handles. Examples: logging, webhooks, external API calls, notifications.
+An action node is a regular node that performs a side effect — logging, triggering a webhook, external API calls — but is **not** expected to emit a typed exit value. It does not count as a leaf node for the purposes of public-exit inference.
 
 The user's framing:
 
-> *"something called an action node, which is a node that exists to perform an action, but does not [forward data]."*
+> *"actions are just nodes, except we dont count them as leaf nodes so we dont expect an exit type from them. They would be for logging, triggering something, etc."*
 
-Why this is a separate kind rather than a Python node with no exits: the intent is to make side effects legible in the graph. A Python node that silently fires a webhook is invisible; an action node connected via a side-arrow insertion point is explicit. The kind distinction also lets the runtime skip action nodes in the normal data-routing pass.
+**Why a `kind` flag rather than a separate concept:** action nodes reuse all existing node machinery (ref resolution, source editing, diagnostics, Inspector header). The only distinction is a flag that tells the runtime "don't route a typed value out of this node." This avoids duplicating node loading, rendering, and mutation code. Action nodes appear in `flow.json`'s `nodes` dict alongside Python and subflow nodes.
 
-**OPEN:** Do action nodes appear in `flow.json`'s `nodes` dict, or in a separate `flow.actions` key? The `nodes` dict approach is simpler for the loader; the separate key keeps the data-flow graph topologically clean.
+Action nodes connect to the main graph via either normal edges (chained after an upstream node) or via the **chained insertion point** pattern described below. They render visually as side-arrows on the connecting node, keeping the main data flow top-to-bottom and side effects visually horizontal.
 
 ---
 
-## Insertion Points (planned)
+## Insertion Points (two distinct concepts)
 
-An insertion point is a side arrow on a node — left or right edge, distinct from the top (input) and bottom (exit) handles. Firing an insertion point is a side effect triggered when the node executes. Insertion points connect to action nodes or subflow calls.
+The term "insertion point" covers two different ideas that share a visual metaphor (side arrows on a node) but differ in when and how they run. It's important to distinguish them.
+
+> *"there are probably insertion point type breaks where you run in the middle of the code with a certain exec state, and then there are insertions where you just chain an action after a node runs."*
+
+> *"it would be nice if you could make this stick to the side of the node so your node sequences could still remain."*
+
+### A. Chained action node (near-term)
+
+A regular action node connected via a normal edge as a successor of some upstream node. Runs after the upstream node completes — not during it. The visual rendering places this connection as a side arrow on the upstream node rather than a downward exit handle, so the main data-flow column stays clean.
+
+This requires no runtime changes — it's just an action-kind node connected with a normal edge and rendered with a horizontal arrow. Ships when action nodes land.
+
+### B. Code insertion point (deferred)
+
+A hook inserted **into** a node's function body at a specific source anchor. Runs with the exec state of the code at that point — i.e., local variables at that line are accessible.
 
 The user's framing:
 
-> *"I wonder if we can have insertion points appear as arrows coming out of the node's side? That would be intuitive. This could also be used to represent calling nodes or chains within the script as well."*
+> *"I didnt mean for insertion points to run after a node runs. I meant for you to literally insert a point within the code itself that will execute at that point with the exec state of the code at that point."*
 
-**Rationale:** keeping main data flow top-to-bottom and side effects left-to-right makes graph reading fast. A horizontal arrow signals "this is a consequence, not a route." This also makes it natural to represent script-level calls (calling a helper function from within a node) as visible graph structure without polluting the DAG topology.
+This is the more powerful and more complex variant. It requires AST instrumentation of the node's source, a way to specify the anchor (line number? label? decorator?), and executor support for injecting execution mid-function. Deferred to the Action system work (future SPEC.md §12).
 
-**OPEN:** How are insertion points created at edit time? Drag from the side arrow? Right-click → "Add insertion point"?
+Both variants share the visual side-arrow metaphor — the spatial distinction between "data flows down" and "side effects flow sideways" holds for both.
+
+**OPEN:** How are insertion points connected at edit time? Drag from the side arrow? Right-click menu?
+
+---
+
+## Layout persistence
+
+Node positions and other canvas layout state are stored in `flow.json`'s `layout` block.
+
+```json
+"layout": {
+  "nodes": {
+    "greet": { "x": 120, "y": 80 },
+    "enrich": { "x": 120, "y": 240 }
+  },
+  "exits": {
+    "validate": ["valid", "invalid"]
+  }
+}
+```
+
+**Merge semantics:** `PUT /layout` merges the incoming `nodes` dict over the existing one — a partial update with `{"greet": {...}}` does not erase positions for other nodes. This means the frontend can batch-save only moved nodes without clobbering the rest.
+
+**BFS fallback:** when a node has no saved position in `layout.nodes`, the frontend falls back to BFS auto-layout to compute an initial position. Once the user moves the node, the new position is saved and the fallback no longer applies.
+
+**Already shipped:** `layout.exits[nodeId] = [order]` stores the switcher-strip exit order for multi-exit nodes.
+
+**Planned:** `layout.sticky_notes: [{id, x, y, w, h, markdown}]` for floating canvas annotations (see `ANNOTATIONS.md`).
 
 ---
 
 ## Attachments
 
-Attachments are operational concerns that ride on a node without affecting graph topology. They carry no edges, do not transform data, and do not appear as boxes. Rendering concept: a small pill badge in the node's corner. Clicking the pill opens the attachment config in the editor header (see `EDITOR_MERGE.md`).
+Attachments are operational concerns that ride on a node without affecting graph topology. They carry no edges, do not transform data, and do not appear as boxes. Rendering: a small pill badge in the node's corner. Clicking the pill opens the attachment config in the editor header (see `EDITOR_MERGE.md`).
 
 ### Storage
 
@@ -66,11 +108,11 @@ Storage is close to being shippable — the local store model is straightforward
 
 A dev-time testing attachment. Holds a configured sample payload; when the user selects "Run from here," the feeder injects that payload into the node's input instead of requiring data to flow from upstream.
 
-The user's clarification (previously this was called "Trigger"):
+The user's clarification (previously called "Trigger"):
 
 > *"I was speaking about triggers as ways to inject example cases and types into the nodes mainly for testing."*
 
-This is distinct from the production invocation concept (renamed below). A Feeder is strictly a dev affordance — it would not be active in production runs.
+A Feeder is strictly a dev affordance — it would not be active in production runs.
 
 ### Invocation Endpoint (deferred, formerly "Trigger")
 
