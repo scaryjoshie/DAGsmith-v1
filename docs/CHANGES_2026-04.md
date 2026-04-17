@@ -189,8 +189,18 @@ A virtual Start node (explicit entry with a ▶ icon) is planned for flows that 
 
 ## Known limitations
 
-- **Edge selection doesn't recolor arrowhead.** When an edge is selected, the stroke turns the selection color but the arrowhead marker retains its default color. Being fixed in the current impl-polish pass.
-- **Delete-node cancel doesn't preserve connected edges.** Cancelling out of the delete confirmation still removes edges connected to the node in some cases. Being fixed in the current impl-polish pass.
+**BLOCKING — fix before next session:**
+
+- **Backend `flow.json` write corruption on DELETE.** After a DELETE mutation (node or edge), the file is written with valid JSON followed by trailing `}\n}\n` garbage. The file remains parseable in the current backend session, but on the next startup the extra braces cause a load error and the workspace fails to start entirely. Recovery requires manually truncating the file. Root cause: likely a double-close or `json.dump` called twice in `dagsmith/server/routes_mutate.py`. **Priority 0.**
+
+**In progress (impl-polish pass):**
+
+- **Edge selection doesn't recolor arrowhead.** When an edge is selected, the stroke turns the selection color but the arrowhead marker retains its default color.
+- **Delete-node cancel doesn't preserve connected edges.** Cancelling out of the delete confirmation still removes edges connected to the node in some cases.
+
+**Open:**
+
+- **Inspector stale after node deletion.** When you delete the currently-selected node, the Inspector panel keeps showing its fields instead of auto-dismissing. Low priority cosmetic issue.
 - **No undo/redo system.** The biggest structural gap in the editing system. Every mutation writes directly to `flow.json` with no history. Adding undo/redo requires either a command stack on the frontend or a versioned mutation log on the backend. Not in scope for this session.
 - **Zero-width edge between flush-stacked nodes.** The edge exists in the data model but is visually invisible and unclickable when nodes are snapped flush. The fusion visual hides it intentionally (`a7cdf38`); edge delete requires the Inspector or direct `flow.json` edit.
 - **Drag can't be completed via Playwright synthetic events.** xyflow uses pointer capture which Playwright's synthetic drag events don't satisfy. Visual verification of snap/drag features requires manual browser testing.
@@ -221,6 +231,7 @@ The branch is `feat/subflows-chains-ui`. Backend tests: `uv run pytest -q` (116 
 
 ### Remaining work (forward plan)
 
+0. **FIX: backend JSON corruption on DELETE** — trailing `}\n}\n` appended to `flow.json` after DELETE mutations causes load failure on next restart. Fix in `dagsmith/server/routes_mutate.py` before anything else.
 1. **Full editor-merge implementation** — preview-tab on node selection, Inspector-into-editor header, attachment config inline. Specified in `EDITOR_MERGE.md`; not yet started.
 2. **Undo/redo** — biggest structural gap. No design yet.
 3. **Start node** — virtual ▶ entry node. Backend: new `kind: "start"`. Frontend: distinct rendering.
