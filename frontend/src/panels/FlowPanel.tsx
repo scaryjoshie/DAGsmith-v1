@@ -54,9 +54,9 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
     try {
       setFlow(await getFlow(workspaceName, flowId));
     } catch (e) {
-      setLoadError((e as Error).message);
+      showMutationError((e as Error).message);
     }
-  }, [workspaceName, flowId]);
+  }, [workspaceName, flowId, showMutationError]);
 
   // Register refetch so Inspector mutations can trigger canvas refresh.
   useEffect(() => {
