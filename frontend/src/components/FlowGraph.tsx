@@ -357,11 +357,32 @@ function FlowGraphInner({
     [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap],
   );
 
+  const mismatchEdgeIndices = useMemo(() => {
+    const set = new Set<number>();
+    for (const d of flow.diagnostics ?? []) {
+      if (d.code === 'type_mismatch' && d.edge_index !== null) {
+        set.add(d.edge_index);
+      }
+    }
+    return set;
+  }, [flow.diagnostics]);
+
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   const decoratedEdges = useMemo(
-    () => edges.map((e) => e.id === selectedEdgeId ? { ...e, selected: true } : e),
-    [edges, selectedEdgeId],
+    () => edges.map((e, idx) => {
+      if (e.id === selectedEdgeId) return { ...e, selected: true };
+      if (mismatchEdgeIndices.has(idx)) {
+        return {
+          ...e,
+          data: { ...(e.data as object), mismatch: true },
+          style: { stroke: 'var(--severity-blocking)', strokeWidth: 1.6 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--severity-blocking)', width: 22, height: 22 },
+        };
+      }
+      return e;
+    }),
+    [edges, selectedEdgeId, mismatchEdgeIndices],
   );
 
   return (
