@@ -298,7 +298,7 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
         position,
         data: {
           label: id,
-          icon: <PythonIcon size={14} />,
+          icon: <PythonIcon size={16} />,
           exits,
         },
       });

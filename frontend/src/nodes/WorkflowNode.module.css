@@ -4,7 +4,7 @@
   border-radius: var(--radius-1);
   display: flex;
   flex-direction: column;
-  min-width: 220px;
+  min-width: 260px;
   font-family: var(--font-mono);
   letter-spacing: -0.01em;
   color: var(--fg-0);
@@ -29,11 +29,11 @@
 }
 
 .body {
-  padding: 10px 14px;
+  padding: 12px 18px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: var(--text-md);
+  gap: 12px;
+  font-size: var(--text-lg, var(--text-md));
 }
 
 .terminal {
@@ -69,8 +69,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   color: var(--fg-2);
 }
