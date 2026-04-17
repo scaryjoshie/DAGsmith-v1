@@ -1,40 +1,60 @@
-import { DockviewReact, type DockviewReadyEvent } from 'dockview';
-import type { Connection } from '@xyflow/react';
-import type { FlowView, WorkspaceView } from '../types';
+import { useCallback, useEffect, useRef } from 'react';
+import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview';
+import { FlowPanel } from '../panels/FlowPanel';
+import type { WorkspaceView } from '../types';
 import styles from './DockviewCanvas.module.css';
 
-export interface PanelContext {
+interface DockviewCanvasProps {
   workspaceName: string;
   workspace: WorkspaceView | null;
-  flow: FlowView | null;
-  loadError: string | null;
-  onConnect: (connection: Connection) => void;
-  onDeleteNode: (nodeId: string) => void;
-  onDeleteEdge: (fromNode: string, fromExit: string) => void;
-  onNodePositionChange: (nodeId: string, x: number, y: number) => void;
-  onOpenSource: (nodeId: string, split: boolean) => void;
-}
-
-interface DockviewCanvasProps {
-  context: PanelContext;
+  onApiReady?: (api: DockviewApi) => void;
 }
 
 const components = {
-  stub: () => (
-    <div style={{ padding: 16, color: 'var(--fg-0)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-      hello from dockview
-    </div>
-  ),
+  flow: FlowPanel,
 };
 
-function onReady(event: DockviewReadyEvent): void {
-  event.api.addPanel({ id: 'stub_1', component: 'stub', title: 'stub' });
-}
+export function DockviewCanvas({ workspaceName, workspace, onApiReady }: DockviewCanvasProps) {
+  const apiRef = useRef<DockviewApi | null>(null);
+  const workspaceNameRef = useRef(workspaceName);
+  workspaceNameRef.current = workspaceName;
 
-export function DockviewCanvas(_props: DockviewCanvasProps) {
+  const onReady = useCallback((event: DockviewReadyEvent) => {
+    apiRef.current = event.api;
+    onApiReady?.(event.api);
+  }, [onApiReady]);
+
+  // When workspace loads, auto-open the first flow if no panels are open.
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api || !workspace || workspace.flow_ids.length === 0) return;
+    if (api.panels.length > 0) return;
+    const firstId = workspace.flow_ids[0];
+    api.addPanel({
+      id: firstId,
+      component: 'flow',
+      title: firstId.split('.').pop() ?? firstId,
+      params: { workspaceName: workspaceNameRef.current, flowId: firstId },
+    });
+  }, [workspace]);
+
   return (
     <div className={`${styles.wrapper} dagsmith-theme`}>
       <DockviewReact components={components} onReady={onReady} />
     </div>
   );
+}
+
+export function openFlowPanel(api: DockviewApi, workspaceName: string, flowId: string): void {
+  const existing = api.panels.find((p) => p.id === flowId);
+  if (existing) {
+    existing.api.setActive();
+    return;
+  }
+  api.addPanel({
+    id: flowId,
+    component: 'flow',
+    title: flowId.split('.').pop() ?? flowId,
+    params: { workspaceName, flowId },
+  });
 }

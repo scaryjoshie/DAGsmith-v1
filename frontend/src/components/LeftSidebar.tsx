@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useTabs } from '../tabs/TabsProvider';
 import type { WorkspaceView } from '../types';
 import styles from './LeftSidebar.module.css';
 
@@ -8,6 +7,7 @@ interface LeftSidebarProps {
   workspace: WorkspaceView | null;
   allWorkspaces: WorkspaceView[];
   onWorkspaceChange: (name: string) => void;
+  onOpenFlow: (flowId: string) => void;
   onRunClick: () => void;
   onAddNodeClick: () => void;
   canRun: boolean;
@@ -19,6 +19,7 @@ export function LeftSidebar({
   workspace,
   allWorkspaces,
   onWorkspaceChange,
+  onOpenFlow,
   onRunClick,
   onAddNodeClick,
   canRun,
@@ -51,7 +52,7 @@ export function LeftSidebar({
         <Section title="Flows" defaultOpen>
           {workspace ? (
             workspace.flow_ids.length > 0 ? (
-              <FlowTree flowIds={workspace.flow_ids} />
+              <FlowTree flowIds={workspace.flow_ids} onOpenFlow={onOpenFlow} />
             ) : (
               <div className={styles.muted}>no flows</div>
             )
@@ -163,14 +164,15 @@ function buildFlowTree(flowIds: string[]): FlowTreeNode[] {
 
 interface FlowTreeProps {
   flowIds: string[];
+  onOpenFlow: (flowId: string) => void;
 }
 
-function FlowTree({ flowIds }: FlowTreeProps) {
+function FlowTree({ flowIds, onOpenFlow }: FlowTreeProps) {
   const tree = useMemo(() => buildFlowTree(flowIds), [flowIds]);
   return (
     <ul className={styles.tree}>
       {tree.map((node) => (
-        <FlowTreeRow key={node.flowId ?? node.label} node={node} depth={0} />
+        <FlowTreeRow key={node.flowId ?? node.label} node={node} depth={0} onOpenFlow={onOpenFlow} />
       ))}
     </ul>
   );
@@ -179,30 +181,22 @@ function FlowTree({ flowIds }: FlowTreeProps) {
 interface FlowTreeRowProps {
   node: FlowTreeNode;
   depth: number;
+  onOpenFlow: (flowId: string) => void;
 }
 
-function FlowTreeRow({ node, depth }: FlowTreeRowProps) {
-  const { openTab, state } = useTabs();
+function FlowTreeRow({ node, depth, onOpenFlow }: FlowTreeRowProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
-  const isActive =
-    node.flowId !== null && isActiveFlowTab(state, node.flowId);
-  const isOpenTab =
-    node.flowId !== null && hasTabForFlow(state.root, node.flowId);
 
   function handleClick(): void {
     if (node.flowId) {
-      openTab({ kind: 'flow', flow_id: node.flowId, title: node.label });
+      onOpenFlow(node.flowId);
     } else if (hasChildren) {
       setExpanded((v) => !v);
     }
   }
 
-  const rowClass = isActive
-    ? `${styles.row} ${styles.rowActive}`
-    : isOpenTab
-      ? `${styles.row} ${styles.rowOpen}`
-      : styles.row;
+  const rowClass = styles.row;
 
   return (
     <li>
@@ -237,6 +231,7 @@ function FlowTreeRow({ node, depth }: FlowTreeRowProps) {
               key={child.flowId ?? `${node.label}.${child.label}`}
               node={child}
               depth={depth + 1}
+              onOpenFlow={onOpenFlow}
             />
           ))}
         </ul>
@@ -245,24 +240,3 @@ function FlowTreeRow({ node, depth }: FlowTreeRowProps) {
   );
 }
 
-function hasTabForFlow(pane: import('../tabs/types').Pane, flowId: string): boolean {
-  if (pane.kind === 'leaf') {
-    return pane.tabs.some((t) => t.kind === 'flow' && t.flow_id === flowId);
-  }
-  return hasTabForFlow(pane.first, flowId) || hasTabForFlow(pane.second, flowId);
-}
-
-function isActiveFlowTab(
-  state: import('../tabs/types').TabsState,
-  flowId: string
-): boolean {
-  const findLeaf = (p: import('../tabs/types').Pane): import('../tabs/types').LeafPane | null => {
-    if (p.id === state.activePaneId && p.kind === 'leaf') return p;
-    if (p.kind === 'split') return findLeaf(p.first) ?? findLeaf(p.second);
-    return null;
-  };
-  const pane = findLeaf(state.root);
-  if (!pane) return false;
-  const active = pane.tabs.find((t) => t.id === pane.activeTabId);
-  return !!active && active.kind === 'flow' && active.flow_id === flowId;
-}
