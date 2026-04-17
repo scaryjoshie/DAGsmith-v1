@@ -14,6 +14,8 @@ export type WorkflowNodeData = {
   snapTarget?: boolean;
   severity?: 'blocking' | 'warning' | null;
   fanOutCounts?: Record<string, number>;
+  snappedAbove?: boolean;
+  snappedBelow?: boolean;
 };
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
@@ -60,6 +62,8 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
     styles.process,
     data.snapTarget ? styles.snapTarget : null,
     severityClass,
+    data.snappedAbove ? styles.snappedAbove : null,
+    data.snappedBelow ? styles.snappedBelow : null,
   ].filter(Boolean).join(' ');
   const handleClass = isConnecting ? `${styles.handle} ${styles.handleVisible}` : styles.handle;
   const switcherHandleClass = isConnecting

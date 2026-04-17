@@ -348,6 +348,31 @@ function FlowGraphInner({
     return result;
   }, [flow.edges]);
 
+  // Detect flush-stacked pairs: node A bottom is flush with node B top.
+  // snappedAbove = this node has another node flush-stacked below it.
+  // snappedBelow = this node is flush-stacked on top of another node.
+  const FLUSH_TOLERANCE = 2;
+  const stackFlags = useMemo(() => {
+    const above = new Set<string>(); // node has a stacked child below
+    const below = new Set<string>(); // node is stacked on top of a parent
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const top = nodes[i];
+        const bot = nodes[j];
+        if (top.id.startsWith('exit:') || bot.id.startsWith('exit:')) continue;
+        const h = top.measured?.height ?? FALLBACK_NODE_HEIGHT;
+        const dy = Math.abs(bot.position.y - (top.position.y + h));
+        const dx = Math.abs(bot.position.x - top.position.x);
+        if (dy <= FLUSH_TOLERANCE && dx <= FLUSH_TOLERANCE) {
+          above.add(top.id);
+          below.add(bot.id);
+        }
+      }
+    }
+    return { above, below };
+  }, [nodes]);
+
   const decoratedNodes = useMemo(
     () =>
       nodes.map((n) => ({
@@ -359,9 +384,11 @@ function FlowGraphInner({
           onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
           severity: nodeSeverity.get(n.id) ?? null,
           fanOutCounts: fanOutMap.get(n.id),
+          snappedAbove: stackFlags.above.has(n.id),
+          snappedBelow: stackFlags.below.has(n.id),
         },
       })),
-    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap],
+    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap, stackFlags],
   );
 
   const mismatchEdgeIndices = useMemo(() => {

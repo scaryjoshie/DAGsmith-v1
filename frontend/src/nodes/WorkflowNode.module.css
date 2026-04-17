@@ -30,6 +30,19 @@
   box-shadow: 0 2px 0 0 var(--selection);
 }
 
+/* Fused-stack visual: top node loses bottom rounding, bottom node loses top border+rounding */
+.process.snappedAbove {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.process.snappedBelow {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: 0;
+}
+
 .process.severityBlocking,
 .process.severityBlocking:hover {
   border-color: var(--severity-blocking);
