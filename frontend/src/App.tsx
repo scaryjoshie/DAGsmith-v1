@@ -5,6 +5,7 @@ import { Shell } from './components/Shell';
 import { DockviewCanvas, openFlowPanel } from './components/DockviewCanvas';
 import { LeftSidebar } from './components/LeftSidebar';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
+import { RunPreflightModal } from './components/RunPreflightModal';
 import { Inspector } from './components/Inspector';
 import { SelectionContext, type SelectedNode } from './SelectionContext';
 import type { DockviewApi } from 'dockview';
@@ -50,6 +51,7 @@ export default function App() {
   const [activeFlow, setActiveFlow] = useState<FlowPanelParams | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [preflightOpen, setPreflightOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<FlowView | null>(null);
   const [activeFlowView, setActiveFlowView] = useState<FlowView | null>(null);
@@ -69,6 +71,7 @@ export default function App() {
     setWorkspace(null);
     setActiveFlow(null);
     setRunPanelOpen(false);
+    setPreflightOpen(false);
     setSelectedNode(null);
     setSelectedFlow(null);
     getWorkspace(workspaceName)
@@ -126,6 +129,18 @@ export default function App() {
     }
   }, [activeFlow]);
 
+  const handleRunClick = useCallback(() => {
+    if (!activeFlow) return;
+    const diags = activeFlowView?.diagnostics ?? [];
+    const hasErrors = diags.some((d) => d.severity === 'error');
+    const hasWarnings = diags.some((d) => d.severity === 'warning');
+    if (hasErrors || hasWarnings) {
+      setPreflightOpen(true);
+    } else {
+      setRunPanelOpen((v) => !v);
+    }
+  }, [activeFlow, activeFlowView]);
+
   const handleActivePanelChange = useCallback((params: FlowPanelParams | null) => {
     setActiveFlow(params);
     // Clear selection when active panel changes
@@ -133,6 +148,7 @@ export default function App() {
     setSelectedFlow(null);
     if (!params) {
       setRunPanelOpen(false);
+      setPreflightOpen(false);
       setShowAddDialog(false);
     }
   }, []);
@@ -190,7 +206,7 @@ export default function App() {
       activeFlowView={activeFlowView}
       onWorkspaceChange={handleWorkspaceChange}
       onOpenFlow={handleOpenFlow}
-      onRunClick={() => setRunPanelOpen((v) => !v)}
+      onRunClick={handleRunClick}
       onAddNodeClick={() => setShowAddDialog(true)}
       onPanToNode={handlePanToNode}
       onNodeSelect={handleNodeSelect}
@@ -249,6 +265,21 @@ export default function App() {
   return (
     <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutatedWithView }}>
       <Shell sidebarBody={sidebar} canvas={canvas} bottomPanel={inspector} />
+      {preflightOpen && activeFlow && activeFlowView && (
+        <RunPreflightModal
+          flowId={activeFlow.flowId}
+          diagnostics={activeFlowView.diagnostics}
+          onRunAnyway={() => {
+            setPreflightOpen(false);
+            setRunPanelOpen(true);
+          }}
+          onDismiss={() => setPreflightOpen(false)}
+          onSelectNode={(nodeId) => {
+            handleNodeSelect({ nodeId, flowId: activeFlow.flowId, workspaceName });
+            handlePanToNode(nodeId);
+          }}
+        />
+      )}
       {showAddDialog && activeFlow && (
         <AddNodeDialog
           workspace={activeFlow.workspaceName}
