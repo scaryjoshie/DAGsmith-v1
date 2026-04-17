@@ -400,6 +400,19 @@ function FlowGraphInner({
     [onDeleteNode],
   );
 
+  const handleBeforeDelete = useCallback(
+    async ({ nodes: nodesToDelete }: { nodes: WorkflowNodeType[]; edges: Edge[] }) => {
+      const realNodes = nodesToDelete.filter((n) => !n.id.startsWith('exit:'));
+      if (realNodes.length === 0) return true;
+      const names = realNodes.map((n) => n.id).join(', ');
+      const label = realNodes.length === 1
+        ? `Delete node '${names}' and its edges?`
+        : `Delete nodes ${names} and their edges?`;
+      return window.confirm(label);
+    },
+    [],
+  );
+
   const cachedViewport = viewportCache.get(flow.id);
   const viewportRef = useRef<Viewport | null>(cachedViewport ?? null);
   const handleViewportChange = useCallback(
@@ -546,6 +559,7 @@ function FlowGraphInner({
             snapToGrid
             snapGrid={[16, 16]}
             deleteKeyCode={['Delete', 'Backspace']}
+            onBeforeDelete={handleBeforeDelete}
             onNodesChange={handleNodesChange}
             onConnect={onConnect}
             onNodesDelete={handleNodesDelete}

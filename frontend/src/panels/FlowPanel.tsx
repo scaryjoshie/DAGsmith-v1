@@ -76,10 +76,6 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!flow) return;
-    if (!window.confirm(`Delete node '${nodeId}' and its edges?`)) {
-      await refetchFlow();
-      return;
-    }
     try {
       setFlow(await deleteNode(workspaceName, flowId, nodeId));
     } catch (e) {
