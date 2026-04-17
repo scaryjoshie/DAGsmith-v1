@@ -1,3 +1,43 @@
+@import "tailwindcss";
+
+/* Token bridge: :root vars are source of truth; @theme re-exposes them as Tailwind utilities. */
+@theme inline {
+  --color-surface-0: var(--bg-0);
+  --color-surface-1: var(--bg-1);
+  --color-surface-2: var(--bg-2);
+  --color-surface-3: var(--bg-3);
+  --color-surface-hover: var(--bg-hover);
+
+  --color-line-0: var(--border-0);
+  --color-line-1: var(--border-1);
+  --color-line-2: var(--border-2);
+
+  --color-ink-0: var(--fg-0);
+  --color-ink-1: var(--fg-1);
+  --color-ink-2: var(--fg-2);
+  --color-ink-3: var(--fg-3);
+
+  --color-accent: var(--accent);
+  --color-blue: var(--blue);
+  --color-red: var(--red);
+  --color-amber: var(--amber);
+  --color-selection: var(--selection);
+  --color-severity-blocking: var(--severity-blocking);
+  --color-severity-warning: var(--severity-warning);
+
+  --radius-none: var(--radius-0);
+  --radius-xs: var(--radius-1);
+  --radius-sm: var(--radius-2);
+
+  --font-mono: var(--font-mono);
+  --font-sans: var(--font-sans);
+
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+}
+
 :root {
   --bg-0: #000;
   --bg-1: #0a0a0a;
