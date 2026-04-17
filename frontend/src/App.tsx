@@ -172,6 +172,7 @@ export default function App() {
       selectedNode={selectedNode}
       flow={selectedFlow}
       onOpenSource={handleOpenSource}
+      onDismiss={() => setSelectedNode(null)}
     />
   ) : undefined;
 

@@ -1,27 +1,34 @@
+import { useEffect } from 'react';
 import type { FlowView } from '../types';
 import type { SelectedNode } from '../SelectionContext';
 import styles from './Inspector.module.css';
 
 interface InspectorProps {
-  selectedNode: SelectedNode | null;
+  selectedNode: SelectedNode;
   flow: FlowView | null;
   onOpenSource: (nodeId: string, split: boolean) => void;
+  onDismiss: () => void;
 }
 
-export function Inspector({ selectedNode, flow, onOpenSource }: InspectorProps) {
-  if (!selectedNode || !flow) {
-    return (
-      <div className={styles.root}>
-        <div className={styles.empty}>Select a node to inspect</div>
-      </div>
-    );
-  }
+export function Inspector({ selectedNode, flow, onOpenSource, onDismiss }: InspectorProps) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onDismiss]);
 
-  const node = flow.nodes[selectedNode.nodeId];
+  const node = flow?.nodes[selectedNode.nodeId];
+
   if (!node) {
     return (
       <div className={styles.root}>
-        <div className={styles.empty}>Select a node to inspect</div>
+        <div className={styles.loading}>loading…</div>
+        <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
       </div>
     );
   }
@@ -31,38 +38,33 @@ export function Inspector({ selectedNode, flow, onOpenSource }: InspectorProps) 
 
   return (
     <div className={styles.root}>
-      <div className={styles.header}>
+      <div className={styles.identity}>
         <span className={styles.kindChip}>{node.kind}</span>
         <span className={styles.name}>{node.name}</span>
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>input</div>
-        <code className={styles.typeRef} title={node.input_type}>
-          {shortName(node.input_type)}
-        </code>
-      </div>
+      <div className={styles.fields}>
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>input</span>
+          <code className={styles.typeRef} title={node.input_type}>{shortName(node.input_type)}</code>
+        </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>exits</div>
-        <ul className={styles.exitsList}>
-          {exits.map(([name, type]) => (
-            <li key={name} className={styles.exitRow}>
-              <span className={styles.exitName}>{name}</span>
-              <span className={styles.arrow}>→</span>
-              <code className={styles.typeRef} title={type}>
-                {shortName(type)}
-              </code>
-            </li>
-          ))}
-        </ul>
-      </div>
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>ref</span>
+          <code className={styles.refValue} title={node.ref}>{node.ref}</code>
+        </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>ref</div>
-        <code className={styles.refLine} title={node.ref}>
-          {node.ref}
-        </code>
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>exits</span>
+          <div className={styles.exitPills}>
+            {exits.map(([name, type]) => (
+              <span key={name} className={styles.exitPill} title={type}>
+                <span className={styles.exitName}>{name}</span>
+                <span className={styles.exitType}>{shortName(type)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className={styles.actions}>
@@ -84,14 +86,10 @@ export function Inspector({ selectedNode, flow, onOpenSource }: InspectorProps) 
           >
             Open source →
           </button>
-        ) : (
-          <span className={styles.hint}>no source available</span>
-        )}
+        ) : null}
       </div>
 
-      <div className={styles.footnote}>
-        label edit + exit mutations coming in M6/M7
-      </div>
+      <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
     </div>
   );
 }
