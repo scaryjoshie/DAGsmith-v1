@@ -4,6 +4,7 @@ import type { IDockviewPanelProps } from 'dockview';
 import { FlowGraph } from '../components/FlowGraph';
 import { Toast } from '../components/Toast';
 import {
+  API_BASE,
   addEdge,
   deleteEdge,
   deleteNode,
@@ -20,8 +21,6 @@ export interface FlowPanelParams {
   flowId: string;
 }
 
-const LAYOUT_DEBOUNCE_MS = 500;
-
 export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPanelParams>) {
   const { workspaceName, flowId } = params;
   const panelId = panelApi.id;
@@ -29,7 +28,7 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const pendingLayoutRef = useRef<LayoutPositions | null>(null);
-  const layoutTimerRef = useRef<number | null>(null);
+  const flushScheduledRef = useRef(false);
 
   const showToast = useCallback((msg: string) => { setToastMsg(msg); }, []);
 
@@ -116,20 +115,48 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
     }
   }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
+  const flushLayout = useCallback(() => {
+    const positions = pendingLayoutRef.current;
+    pendingLayoutRef.current = null;
+    flushScheduledRef.current = false;
+    if (positions && Object.keys(positions).length > 0) {
+      updateLayout(workspaceName, flowId, positions).catch((e) => {
+        showToast((e as Error).message);
+      });
+    }
+  }, [workspaceName, flowId, showToast]);
+
+  // Flush any pending layout save on unmount and on page unload.
+  useEffect(() => {
+    const onUnload = () => {
+      const positions = pendingLayoutRef.current;
+      if (positions && Object.keys(positions).length > 0) {
+        // Synchronous fire-and-forget via sendBeacon isn't available for JSON PUT,
+        // so use a synchronous XHR as a best-effort flush on unload.
+        const url = `${API_BASE}/api/workspaces/${encodeURIComponent(workspaceName)}/flows/${encodeURIComponent(flowId)}/layout`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, false); // synchronous
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        try { xhr.send(JSON.stringify({ nodes: positions })); } catch { /* best effort */ }
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onUnload);
+      // Also flush on unmount (tab close / HMR component teardown).
+      flushLayout();
+    };
+  }, [workspaceName, flowId, flushLayout]);
+
   const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
     pendingLayoutRef.current = { ...(pendingLayoutRef.current ?? {}), [nodeId]: { x, y } };
-    if (layoutTimerRef.current !== null) window.clearTimeout(layoutTimerRef.current);
-    layoutTimerRef.current = window.setTimeout(() => {
-      const positions = pendingLayoutRef.current;
-      pendingLayoutRef.current = null;
-      layoutTimerRef.current = null;
-      if (positions) {
-        updateLayout(workspaceName, flowId, positions).catch((e) => {
-          showToast((e as Error).message);
-        });
-      }
-    }, LAYOUT_DEBOUNCE_MS);
-  }, [workspaceName, flowId, showToast]);
+    // Schedule a microtask flush — fires before any browser paint or HMR teardown,
+    // and batches multiple same-tick calls (e.g. chain drag saving N nodes at once).
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true;
+      queueMicrotask(flushLayout);
+    }
+  }, [flushLayout]);
 
   const handleExitsReorder = useCallback(async (nodeId: string, newOrder: string[]) => {
     if (!flow) return;
