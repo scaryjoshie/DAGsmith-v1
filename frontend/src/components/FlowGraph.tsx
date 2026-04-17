@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   reconnectEdge,
+  useReactFlow,
   type Connection,
   type Edge,
   type NodeChange,
@@ -61,16 +62,24 @@ function FlowGraphInner({
   onNodePositionChange,
   onReconnectEdge,
 }: FlowGraphProps) {
+  const { fitView } = useReactFlow();
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
   const [edges, setEdges] = useState<Edge[]>(initial.edges);
   const [snapTargetId, setSnapTargetId] = useState<string | null>(null);
   const snapTargetRef = useRef<string | null>(null);
   snapTargetRef.current = snapTargetId;
+  const prevNodeCountRef = useRef(initial.nodes.length);
 
   useEffect(() => {
+    const newCount = initial.nodes.length;
+    if (newCount > prevNodeCountRef.current) {
+      // Node was added — fit view to show the new node
+      requestAnimationFrame(() => fitView({ padding: 0.15, maxZoom: 1 }));
+    }
+    prevNodeCountRef.current = newCount;
     setNodes(initial.nodes);
-  }, [initial.nodes]);
+  }, [initial.nodes, fitView]);
 
   useEffect(() => {
     setEdges(initial.edges);
