@@ -96,6 +96,7 @@ const X_SPACING = 260;
 // Snap tuning.
 const SNAP_VERTICAL_RANGE = 28; // px: how close the dragged node's top must be to a candidate's bottom
 const SNAP_HORIZONTAL_RANGE = 80; // px: how close in x-alignment
+const FLUSH_TOLERANCE = 2; // px: geometric tolerance for flush-stacked detection
 const FALLBACK_NODE_HEIGHT = 40;
 
 // Module-level cache of viewport state per flow_id. Tabs unmount when
@@ -142,6 +143,11 @@ function FlowGraphInner({
   const snapTargetRef = useRef<string | null>(null);
   snapTargetRef.current = snapTargetId;
   const prevNodeIdsRef = useRef(new Set(initial.nodes.map((n) => n.id)));
+
+  // Chain drag: when top of a stacked chain is dragged, move all chain members.
+  // Maps member id → its offset from the dragged node's start position.
+  const chainOffsetsRef = useRef<Map<string, { dx: number; dy: number }>>(new Map());
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const prevIds = prevNodeIdsRef.current;
@@ -215,22 +221,74 @@ function FlowGraphInner({
   const handleNodesChange = useCallback(
     (changes: NodeChange<WorkflowNodeType>[]) => {
       setNodes((current) => {
-        const next = applyNodeChanges(changes, current);
+        let next = applyNodeChanges(changes, current);
         for (const change of changes) {
           if (change.type !== 'position' || !change.position) continue;
 
           if (change.dragging) {
             if (change.id.startsWith('exit:')) continue;
+
+            // On drag start (first dragging=true event), collect the chain below.
+            if (dragStartPosRef.current === null) {
+              dragStartPosRef.current = change.position;
+              // Collect flush-stacked descendants: follow edges to find children
+              // that are geometrically flush-stacked below this node.
+              const offsets = new Map<string, { dx: number; dy: number }>();
+              const byId = new Map(current.map((n) => [n.id, n]));
+              const visited = new Set<string>([change.id]);
+              const queue = [change.id];
+              while (queue.length > 0) {
+                const parentId = queue.shift()!;
+                const parent = byId.get(parentId);
+                if (!parent) continue;
+                const exits = parent.data.exits;
+                if (!exits || exits.length !== 1) continue;
+                const exitName = exits[0];
+                const boundEdge = flow.edges.find(
+                  (e) => e.from_node === parentId && e.from_exit === exitName,
+                );
+                if (!boundEdge?.to_node) continue;
+                const childId = boundEdge.to_node;
+                if (visited.has(childId)) continue;
+                const child = byId.get(childId);
+                if (!child) continue;
+                const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
+                const dy = Math.abs(child.position.y - (parent.position.y + ph));
+                const dx = Math.abs(child.position.x - parent.position.x);
+                if (dy > FLUSH_TOLERANCE || dx > FLUSH_TOLERANCE) continue;
+                visited.add(childId);
+                queue.push(childId);
+                offsets.set(childId, {
+                  dx: child.position.x - change.position.x,
+                  dy: child.position.y - change.position.y,
+                });
+              }
+              chainOffsetsRef.current = offsets;
+            }
+
+            // Apply chain delta to all members.
+            if (chainOffsetsRef.current.size > 0) {
+              const pos = change.position;
+              next = next.map((n) => {
+                const offset = chainOffsetsRef.current.get(n.id);
+                if (!offset) return n;
+                return { ...n, position: { x: pos.x + offset.dx, y: pos.y + offset.dy } };
+              });
+            }
+
             const candidate = findSnapCandidate(change.id, change.position, next);
             setSnapTargetId(candidate);
             continue;
           }
 
-          // dragging === false: release — clear ref synchronously so re-entrant
-          // calls in the same batch don't fire snap twice.
+          // dragging === false: release — clear refs synchronously so re-entrant
+          // calls in the same batch don't fire snap or chain drag twice.
           const pendingTarget = snapTargetRef.current;
           snapTargetRef.current = null;
           setSnapTargetId(null);
+          const chainOffsets = chainOffsetsRef.current;
+          chainOffsetsRef.current = new Map();
+          dragStartPosRef.current = null;
 
           if (pendingTarget) {
             const target = next.find((n) => n.id === pendingTarget);
@@ -260,6 +318,10 @@ function FlowGraphInner({
               if (!change.id.startsWith('exit:')) {
                 onNodePositionChange(change.id, snappedX, snappedY);
               }
+              // Save positions for chain members that moved with this node.
+              for (const [memberId, offset] of chainOffsets) {
+                onNodePositionChange(memberId, snappedX + offset.dx, snappedY + offset.dy);
+              }
               continue;
             }
           }
@@ -267,11 +329,18 @@ function FlowGraphInner({
           if (!change.id.startsWith('exit:')) {
             onNodePositionChange(change.id, change.position.x, change.position.y);
           }
+          // Save positions for chain members that moved with this node.
+          for (const memberId of chainOffsets.keys()) {
+            const memberNode = next.find((n) => n.id === memberId);
+            if (memberNode) {
+              onNodePositionChange(memberId, memberNode.position.x, memberNode.position.y);
+            }
+          }
         }
         return next;
       });
     },
-    [findSnapCandidate, onConnect, onNodePositionChange],
+    [findSnapCandidate, onConnect, onNodePositionChange, flow.edges],
   );
 
   const handleEdgesDelete = useCallback(
@@ -351,7 +420,6 @@ function FlowGraphInner({
   // Detect flush-stacked pairs: node A bottom is flush with node B top.
   // snappedAbove = this node has another node flush-stacked below it.
   // snappedBelow = this node is flush-stacked on top of another node.
-  const FLUSH_TOLERANCE = 2;
   const stackFlags = useMemo(() => {
     const above = new Set<string>(); // node has a stacked child below
     const below = new Set<string>(); // node is stacked on top of a parent
