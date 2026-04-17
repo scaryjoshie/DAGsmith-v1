@@ -33,7 +33,7 @@ function onReady(event: DockviewReadyEvent): void {
 
 export function DockviewCanvas(_props: DockviewCanvasProps) {
   return (
-    <div className={`${styles.wrapper} dockview-theme-dark`}>
+    <div className={`${styles.wrapper} dagsmith-theme`}>
       <DockviewReact components={components} onReady={onReady} />
     </div>
   );

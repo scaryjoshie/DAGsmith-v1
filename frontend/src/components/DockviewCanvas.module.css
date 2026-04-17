@@ -2,3 +2,129 @@
   width: 100%;
   height: 100%;
 }
+
+/* ── DAGsmith dockview theme ─────────────────────────────────────────────── */
+/* Overrides dockview-theme-dark with the Vercel dark token palette.          */
+
+:global(.dagsmith-theme) {
+  /* Timing / transitions (carried over from dockview-theme-dark base) */
+  --dv-transition-duration: 0.2s;
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.5s;
+  --dv-overlay-z-index: 999;
+
+  /* Neutralize the abyss color palette that dockview injects internally */
+  --dv-color-abyss: #000;
+  --dv-color-abyss-dark: #000;
+  --dv-color-abyss-light: #0a0a0a;
+  --dv-color-abyss-lighter: #111;
+  --dv-color-abyss-accent: #ededed;
+  --dv-color-abyss-primary-text: #ededed;
+  --dv-color-abyss-secondary-text: #737373;
+
+  /* Backgrounds */
+  --dv-group-view-background-color: #000;
+  --dv-tabs-and-actions-container-background-color: #0a0a0a;
+  --dv-activegroup-visiblepanel-tab-background-color: #111;
+  --dv-activegroup-hiddenpanel-tab-background-color: #0a0a0a;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #0a0a0a;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #0a0a0a;
+  --dv-tab-divider-color: #1f1f1f;
+
+  /* Text */
+  --dv-activegroup-visiblepanel-tab-color: #ededed;
+  --dv-activegroup-hiddenpanel-tab-color: #737373;
+  --dv-inactivegroup-visiblepanel-tab-color: #525252;
+  --dv-inactivegroup-hiddenpanel-tab-color: #525252;
+
+  /* Borders / separators */
+  --dv-separator-border: #1f1f1f;
+  --dv-paneview-header-border-color: #1f1f1f;
+  --dv-drag-over-border-color: #333;
+  --dv-drag-over-background-color: rgba(250, 250, 250, 0.04);
+
+  /* Sash (resize handles) */
+  --dv-sash-color: #1f1f1f;
+  --dv-active-sash-color: #333;
+
+  /* Interaction */
+  --dv-icon-hover-background-color: #1a1a1a;
+  --dv-paneview-active-outline-color: #ededed;
+  --dv-scrollbar-background-color: #262626;
+  --dv-tabs-container-scrollbar-color: #262626;
+
+  /* Typography */
+  --dv-tab-font-size: 12px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tabs-and-actions-container-height: 30px;
+
+  /* Shape */
+  --dv-border-radius: 0px;
+  --dv-tab-margin: 0;
+
+  /* Floats / overlays */
+  --dv-floating-box-shadow: 0 0 0 1px #1f1f1f;
+}
+
+/* Tab bar: mono font + bottom border + explicit bg (overrides internal abyss theme) */
+:global(.dagsmith-theme .dv-tabs-and-actions-container) {
+  background-color: #0a0a0a !important;
+  border-bottom: 1px solid #1f1f1f;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Tabs: mono font, sharp corners */
+:global(.dagsmith-theme .dv-tab) {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  border-radius: 0;
+  padding: 0 10px;
+}
+
+/* Active tab: bottom border accent */
+:global(.dagsmith-theme .dv-tab.active-tab) {
+  border-bottom: 1px solid #ededed;
+}
+
+/* Inactive tab hover */
+:global(.dagsmith-theme .dv-tab:not(.active-tab):hover) {
+  background-color: #111;
+  color: #a1a1a1;
+}
+
+/* Close button */
+:global(.dagsmith-theme .dv-tab .dv-default-tab-action) {
+  color: #525252;
+  border-radius: 0;
+}
+:global(.dagsmith-theme .dv-tab .dv-default-tab-action:hover) {
+  background-color: #1a1a1a;
+  color: #ededed;
+}
+
+/* Panel/group background overrides (direct props beat the abyss var chain) */
+:global(.dagsmith-theme .dv-content-container) {
+  background-color: #000 !important;
+}
+
+:global(.dagsmith-theme .dv-groupview) {
+  background-color: #000 !important;
+}
+
+/* Drop overlay */
+:global(.dagsmith-theme .dv-drop-target-container) {
+  background-color: rgba(250, 250, 250, 0.04);
+  border: 1px solid #333;
+}
+
+/* Scrollbar */
+:global(.dagsmith-theme ::-webkit-scrollbar) {
+  width: 8px;
+  height: 8px;
+}
+:global(.dagsmith-theme ::-webkit-scrollbar-thumb) {
+  background: #262626;
+}
+:global(.dagsmith-theme ::-webkit-scrollbar-track) {
+  background: transparent;
+}
