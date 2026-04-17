@@ -1,6 +1,22 @@
-
 # playwright-cli caches (local browser state + screenshots)
 .playwright-cli/
 .playwright/
 .claude/
-initial.png
+
+# OS cruft
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Verifier / dev screenshots — never committed
+*.png
+
+# Frontend build outputs
+frontend/dist/
