@@ -21,8 +21,9 @@ export interface FlowPanelParams {
 
 const LAYOUT_DEBOUNCE_MS = 500;
 
-export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
+export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPanelParams>) {
   const { workspaceName, flowId } = params;
+  const panelId = panelApi.id;
   const { onNodeSelect } = useSelection();
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,12 +61,12 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
 
   // Register refetch so Inspector mutations can trigger canvas refresh.
   useEffect(() => {
-    return registerFlowRefetch(flowId, () => { void refetchFlow(); });
-  }, [flowId, refetchFlow]);
+    return registerFlowRefetch(panelId, flowId, () => { void refetchFlow(); });
+  }, [panelId, flowId, refetchFlow]);
 
   const handleFlowGraphReady = useCallback((panToNode: (nodeId: string) => void) => {
-    registerPanToNode(flowId, panToNode);
-  }, [flowId]);
+    registerPanToNode(panelId, flowId, panToNode);
+  }, [panelId, flowId]);
 
   const handleConnect = useCallback(async (connection: Connection) => {
     if (!flow || !connection.source || !connection.target) return;

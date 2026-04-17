@@ -26,22 +26,21 @@ function writeWorkspaceToURL(name: string): void {
   window.history.replaceState(null, '', url.toString());
 }
 
-// Registry of refetch callbacks keyed by flowId — FlowPanel registers on mount.
-type FlowRefetchRegistry = Map<string, () => void>;
-const flowRefetchRegistry: FlowRefetchRegistry = new Map();
+// Registries keyed by dockview panel ID so split panes with the same flowId don't stomp each other.
+interface RefetchEntry { flowId: string; refetch: () => void; }
+const flowRefetchRegistry = new Map<string, RefetchEntry>();
 
-export function registerFlowRefetch(flowId: string, refetch: () => void): () => void {
-  flowRefetchRegistry.set(flowId, refetch);
-  return () => flowRefetchRegistry.delete(flowId);
+export function registerFlowRefetch(panelId: string, flowId: string, refetch: () => void): () => void {
+  flowRefetchRegistry.set(panelId, { flowId, refetch });
+  return () => flowRefetchRegistry.delete(panelId);
 }
 
-// Registry of pan-to-node callbacks keyed by flowId — FlowPanel registers on mount.
-type PanToNodeRegistry = Map<string, (nodeId: string) => void>;
-const panToNodeRegistry: PanToNodeRegistry = new Map();
+interface PanEntry { flowId: string; pan: (nodeId: string) => void; }
+const panToNodeRegistry = new Map<string, PanEntry>();
 
-export function registerPanToNode(flowId: string, pan: (nodeId: string) => void): () => void {
-  panToNodeRegistry.set(flowId, pan);
-  return () => panToNodeRegistry.delete(flowId);
+export function registerPanToNode(panelId: string, flowId: string, pan: (nodeId: string) => void): () => void {
+  panToNodeRegistry.set(panelId, { flowId, pan });
+  return () => panToNodeRegistry.delete(panelId);
 }
 
 export default function App() {
@@ -121,7 +120,10 @@ export default function App() {
 
   // When FlowPanel refetches (mutation), also refresh activeFlowView.
   const handleFlowMutatedWithView = useCallback((_workspaceName: string, flowId: string) => {
-    flowRefetchRegistry.get(flowId)?.();
+    // Notify all panels showing this flowId (split panes).
+    for (const entry of flowRefetchRegistry.values()) {
+      if (entry.flowId === flowId) entry.refetch();
+    }
     if (activeFlow?.flowId === flowId) {
       getFlow(activeFlow.workspaceName, flowId)
         .then(setActiveFlowView)
@@ -155,7 +157,13 @@ export default function App() {
 
   const handlePanToNode = useCallback((nodeId: string) => {
     if (!activeFlow) return;
-    panToNodeRegistry.get(activeFlow.flowId)?.(nodeId);
+    // Pan the active panel (first match by flowId).
+    for (const entry of panToNodeRegistry.values()) {
+      if (entry.flowId === activeFlow.flowId) {
+        entry.pan(nodeId);
+        break;
+      }
+    }
   }, [activeFlow]);
 
   const handleOpenFlow = useCallback((flowId: string) => {
