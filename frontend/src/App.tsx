@@ -6,8 +6,9 @@ import { DockviewCanvas, openFlowPanel } from './components/DockviewCanvas';
 import { LeftSidebar } from './components/LeftSidebar';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
 import type { DockviewApi } from 'dockview';
-import { getFlow, getWorkspace, listWorkspaces } from './api';
-import type { FlowView, WorkspaceView } from './types';
+import { getWorkspace, listWorkspaces } from './api';
+import type { WorkspaceView } from './types';
+import type { FlowPanelParams } from './panels/FlowPanel';
 
 const DEFAULT_WORKSPACE = 'examples.minimal';
 
@@ -26,7 +27,7 @@ export default function App() {
   const [workspaceName, setWorkspaceName] = useState(readWorkspaceFromURL);
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
   const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceView[]>([]);
-  const [activeFlow, setActiveFlow] = useState<FlowView | null>(null);
+  const [activeFlow, setActiveFlow] = useState<FlowPanelParams | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [runPanelOpen, setRunPanelOpen] = useState(false);
   const dockviewApiRef = useRef<DockviewApi | null>(null);
@@ -43,6 +44,7 @@ export default function App() {
     let cancelled = false;
     setWorkspace(null);
     setActiveFlow(null);
+    setRunPanelOpen(false);
     getWorkspace(workspaceName)
       .then((ws) => {
         if (cancelled) return;
@@ -61,14 +63,18 @@ export default function App() {
     setWorkspaceName(newName);
   }
 
+  const handleActivePanelChange = useCallback((params: FlowPanelParams | null) => {
+    setActiveFlow(params);
+    if (!params) {
+      setRunPanelOpen(false);
+      setShowAddDialog(false);
+    }
+  }, []);
+
   const handleOpenFlow = useCallback((flowId: string) => {
     const api = dockviewApiRef.current;
     if (!api) return;
     openFlowPanel(api, workspaceName, flowId);
-    // Track the active flow for FloatingRunPanel / AddNodeDialog
-    getFlow(workspaceName, flowId)
-      .then(setActiveFlow)
-      .catch(() => {});
   }, [workspaceName]);
 
   const handleApiReady = useCallback((api: DockviewApi) => {
@@ -95,12 +101,12 @@ export default function App() {
         workspaceName={workspaceName}
         workspace={workspace}
         onApiReady={handleApiReady}
+        onActivePanelChange={handleActivePanelChange}
       />
-      {runPanelOpen && workspace && activeFlow && (
+      {runPanelOpen && activeFlow && (
         <FloatingRunPanel
-          workspace={workspace.name}
-          flowId={activeFlow.id}
-          inputType={activeFlow.input_type}
+          workspace={activeFlow.workspaceName}
+          flowId={activeFlow.flowId}
           onClose={() => setRunPanelOpen(false)}
         />
       )}
@@ -110,12 +116,12 @@ export default function App() {
   return (
     <>
       <Shell sidebarBody={sidebar} canvas={canvas} />
-      {showAddDialog && workspace && activeFlow && (
+      {showAddDialog && activeFlow && (
         <AddNodeDialog
-          workspace={workspace.name}
-          flowId={activeFlow.id}
+          workspace={activeFlow.workspaceName}
+          flowId={activeFlow.flowId}
           onClose={() => setShowAddDialog(false)}
-          onCreated={(updated) => setActiveFlow(updated)}
+          onCreated={() => setShowAddDialog(false)}
         />
       )}
     </>

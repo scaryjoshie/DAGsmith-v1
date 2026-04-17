@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview';
-import { FlowPanel } from '../panels/FlowPanel';
+import { FlowPanel, type FlowPanelParams } from '../panels/FlowPanel';
 import type { WorkspaceView } from '../types';
 import styles from './DockviewCanvas.module.css';
 
@@ -8,20 +8,28 @@ interface DockviewCanvasProps {
   workspaceName: string;
   workspace: WorkspaceView | null;
   onApiReady?: (api: DockviewApi) => void;
+  onActivePanelChange?: (params: FlowPanelParams | null) => void;
 }
 
 const components = {
   flow: FlowPanel,
 };
 
-export function DockviewCanvas({ workspaceName, workspace, onApiReady }: DockviewCanvasProps) {
+export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActivePanelChange }: DockviewCanvasProps) {
   const apiRef = useRef<DockviewApi | null>(null);
   const workspaceNameRef = useRef(workspaceName);
   workspaceNameRef.current = workspaceName;
+  const onActivePanelChangeRef = useRef(onActivePanelChange);
+  onActivePanelChangeRef.current = onActivePanelChange;
 
   const onReady = useCallback((event: DockviewReadyEvent) => {
     apiRef.current = event.api;
     onApiReady?.(event.api);
+    event.api.onDidActivePanelChange((panel) => {
+      const cb = onActivePanelChangeRef.current;
+      if (!cb) return;
+      cb(panel ? (panel.params as FlowPanelParams) : null);
+    });
   }, [onApiReady]);
 
   // When workspace loads, auto-open the first flow if no panels are open.

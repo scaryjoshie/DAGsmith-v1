@@ -1,19 +1,29 @@
+import { useEffect, useState } from 'react';
+import { getFlow } from '../api';
 import { RunPanel } from './RunPanel';
 import styles from './FloatingRunPanel.module.css';
 
 interface FloatingRunPanelProps {
   workspace: string;
   flowId: string;
-  inputType: string;
   onClose: () => void;
 }
 
 export function FloatingRunPanel({
   workspace,
   flowId,
-  inputType,
   onClose,
 }: FloatingRunPanelProps) {
+  const [inputType, setInputType] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getFlow(workspace, flowId)
+      .then((f) => { if (!cancelled) setInputType(f.input_type); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [workspace, flowId]);
+
   return (
     <div className={styles.overlay}>
       <div className={styles.header}>
