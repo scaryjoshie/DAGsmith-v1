@@ -326,15 +326,18 @@ function FlowGraphInner({
                 onNodePositionChange(change.id, snappedX, snappedY);
               }
               // Reposition chain members flush below their parents using exact heights,
-              // then save. Walk in insertion order (parent before child).
+              // update next so React state is immediately correct (not waiting for refetch),
+              // and save positions to backend. Walk in insertion order (parent before child).
               if (chainParents.size > 0) {
                 const byId = new Map(next.map((n) => [n.id, n]));
-                byId.set(change.id, { ...byId.get(change.id)!, position: { x: snappedX, y: snappedY } });
+                // Leader position already set in next[idx] above; reflect it in byId too.
+                byId.set(change.id, next[idx]);
                 for (const [memberId, { parentId }] of chainParents) {
                   const parent = byId.get(parentId);
                   if (!parent) continue;
                   const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
                   const memberPos = { x: parent.position.x, y: parent.position.y + ph };
+                  next = next.map((n) => n.id === memberId ? { ...n, position: memberPos } : n);
                   byId.set(memberId, { ...byId.get(memberId)!, position: memberPos });
                   onNodePositionChange(memberId, memberPos.x, memberPos.y);
                 }
@@ -346,7 +349,7 @@ function FlowGraphInner({
           if (!change.id.startsWith('exit:')) {
             onNodePositionChange(change.id, change.position.x, change.position.y);
           }
-          // Save positions for chain members — read from next (already recomputed flush).
+          // Reposition chain members flush below their parents, update next, and save.
           if (chainParents.size > 0) {
             const byId = new Map(next.map((n) => [n.id, n]));
             for (const [memberId, { parentId }] of chainParents) {
@@ -354,6 +357,7 @@ function FlowGraphInner({
               if (!parent) continue;
               const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
               const memberPos = { x: parent.position.x, y: parent.position.y + ph };
+              next = next.map((n) => n.id === memberId ? { ...n, position: memberPos } : n);
               byId.set(memberId, { ...byId.get(memberId)!, position: memberPos });
               onNodePositionChange(memberId, memberPos.x, memberPos.y);
             }
