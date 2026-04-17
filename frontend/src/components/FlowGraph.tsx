@@ -213,6 +213,18 @@ function FlowGraphInner({
 
   const layoutExits = flow.layout?.exits as Record<string, string[]> | undefined;
 
+  const nodeSeverity = useMemo(() => {
+    const map = new Map<string, 'blocking' | 'warning'>();
+    for (const d of flow.diagnostics ?? []) {
+      if (!d.node_id) continue;
+      const current = map.get(d.node_id);
+      const next = d.severity === 'error' ? 'blocking' : d.severity === 'warning' ? 'warning' : null;
+      if (!next) continue;
+      if (current !== 'blocking') map.set(d.node_id, next);
+    }
+    return map;
+  }, [flow.diagnostics]);
+
   const decoratedNodes = useMemo(
     () =>
       nodes.map((n) => ({
@@ -222,9 +234,10 @@ function FlowGraphInner({
           snapTarget: n.id === snapTargetId,
           exitOrder: layoutExits?.[n.id],
           onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
+          severity: nodeSeverity.get(n.id) ?? null,
         },
       })),
-    [nodes, snapTargetId, layoutExits, onExitsReorder],
+    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity],
   );
 
   const decoratedEdges = useMemo(() => {

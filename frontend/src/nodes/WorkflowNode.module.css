@@ -28,6 +28,21 @@
   box-shadow: 0 2px 0 0 var(--selection);
 }
 
+.severityBlocking {
+  border-color: var(--severity-blocking);
+}
+
+.severityWarning {
+  border-color: var(--severity-warning);
+}
+
+/* Selection ring wins over severity */
+:global(.react-flow__node.selected) .severityBlocking,
+:global(.react-flow__node.selected) .severityWarning {
+  border-color: var(--selection);
+  box-shadow: 0 0 0 2px var(--selection);
+}
+
 .body {
   padding: 12px 18px;
   display: flex;

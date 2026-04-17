@@ -19,6 +19,8 @@
   --red: #e5484d;
   --amber: #f5a623;
   --selection: #3b82f6;
+  --severity-blocking: #ef4444;
+  --severity-warning: #f59e0b;
 
   --radius-0: 0;
   --radius-1: 2px;

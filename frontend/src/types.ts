@@ -40,6 +40,15 @@ export interface FlowLayout {
   [key: string]: unknown;
 }
 
+export interface DiagnosticView {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  message: string;
+  flow_id: string;
+  node_id: string | null;
+  edge_index: number | null;
+}
+
 export interface FlowView {
   id: string;
   input_type: string;
@@ -49,6 +58,7 @@ export interface FlowView {
   edges: EdgeView[];
   public_exits: Record<string, string>;
   layout: FlowLayout;
+  diagnostics: DiagnosticView[];
 }
 
 export interface RunResponse {

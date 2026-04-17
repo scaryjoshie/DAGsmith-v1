@@ -12,6 +12,7 @@ export type WorkflowNodeData = {
   exitOrder?: string[];
   onExitsReorder?: (newOrder: string[]) => void;
   snapTarget?: boolean;
+  severity?: 'blocking' | 'warning' | null;
 };
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
@@ -23,8 +24,12 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
 
   if (isTerminal) {
     const handleClass = isConnecting ? `${styles.handle} ${styles.handleVisible}` : styles.handle;
+    const terminalSeverityClass = data.severity === 'blocking'
+      ? styles.severityBlocking
+      : data.severity === 'warning' ? styles.severityWarning : null;
+    const terminalClass = [styles.terminal, terminalSeverityClass].filter(Boolean).join(' ');
     return (
-      <div className={styles.terminal}>
+      <div className={terminalClass}>
         <Handle type="target" position={Position.Top} id="in" className={handleClass} />
         {data.icon && (
           <span
@@ -45,9 +50,16 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
     ? [...data.exitOrder.filter((e) => rawExits.includes(e)), ...rawExits.filter((e) => !data.exitOrder!.includes(e))]
     : rawExits;
   const hasSwitcher = exits.length > 1;
-  const processClass = data.snapTarget
-    ? `${styles.process} ${styles.snapTarget}`
-    : styles.process;
+  const severityClass = data.severity === 'blocking'
+    ? styles.severityBlocking
+    : data.severity === 'warning'
+      ? styles.severityWarning
+      : null;
+  const processClass = [
+    styles.process,
+    data.snapTarget ? styles.snapTarget : null,
+    severityClass,
+  ].filter(Boolean).join(' ');
   const handleClass = isConnecting ? `${styles.handle} ${styles.handleVisible}` : styles.handle;
   const switcherHandleClass = isConnecting
     ? `${styles.switcherHandle} ${styles.handleVisible}`
