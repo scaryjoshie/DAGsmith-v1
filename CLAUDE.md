@@ -17,7 +17,8 @@
 - **Dockview** (`DockviewCanvas.tsx`) for multi-tab split-pane canvas — layout persisted per workspace in localStorage
 - `FlowPanel` keyed by dockview `panelApi.id`; `flowRefetchRegistry` + `panToNodeRegistry` keyed the same way (avoids split-pane stomping)
 - `FlowGraph` wrapped in `<ReactFlowProvider>` per-instance, viewport cache per flow_id
-- `WorkflowNode` has the **switcher strip** at the bottom for multi-exit nodes
+- `WorkflowNode` has the **switcher strip** at the bottom for multi-exit nodes; snap-stacking renders flush with single shared border (double-border artifact fixed `5858849`)
+- Node positions saved immediately to `flow.json` on first render — survive HMR and page reload (`080920d`)
 - `Inspector` in right sidebar: shows diagnostics badge, node fields, rename/ref/exit actions
 - `RunPreflightModal`: errors block run, warnings show confirm dialog, clean → direct run
 - `Toast` component for transient error feedback (no canvas-blocking banners)
@@ -27,7 +28,9 @@
 ### Known limitations
 
 - **Stale tab on workspace switch.** If you switch workspace and a flow with the same ID doesn't exist there, the panel shows "loading…" forever. Known.
-- `classify` auto-layout packs the 3 exit pills horizontally, tight but not overlapping.
+- **No undo/redo.** Every mutation writes directly to `flow.json`; there is no history or rollback.
+- **Edge selection doesn't recolor arrowhead** — being addressed.
+- **Delete-node cancel may still remove connected edges** — being addressed.
 
 ## Working method (non-negotiable)
 

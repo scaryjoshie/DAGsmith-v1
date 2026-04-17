@@ -103,6 +103,22 @@ The Inspector (first as a bottom bar, then as a right sidebar) grew progressivel
 
 Also: `ee0822a` added 5 PATCH /nodes tests (rename cascade, ref change, input type change, exit rename cascade, exit reconciliation with dangling edge deletion). 116 tests total passing.
 
+### Position persistence (`080920d`)
+
+Node positions were not surviving HMR (hot module reload) or page refresh because the frontend only saved positions on drag-end and the save was debounced. After a reload, positions reverted to BFS auto-layout. Fixed by saving positions immediately to `flow.json` via `PUT /layout` on the first render of each node that doesn't yet have a saved position. Positions are now stable across reloads.
+
+### Gitignore and cleanup (`1e33408`)
+
+Expanded `.gitignore` to exclude the large collection of verifier screenshot PNGs that had accumulated in the repo root and `frontend/`. Also removed other debris left by the agent verification passes.
+
+### Fusion single-border fix (`5858849`, `a7cdf38`)
+
+The snap-stacking visual fusion (shared border between stacked nodes) had a double-border artifact: both the bottom border of the upper node and the top border of the lower node were rendering, producing a visually thick seam. Fixed by suppressing one side. `a7cdf38` also hid the edge that runs between flush-stacked nodes (it was rendering through the gap and looked like a line artifact). The edge still exists in the data model; it's just invisible when nodes are flush.
+
+### SPEC currency + doc close-out (`ee0a3ae`)
+
+SPEC.md updated: M5 and M6 marked complete with accurate descriptions, §9.5 added covering the full 2026-04 redesign work, §12 extended with the session's design decisions. Archive headers added to three superseded docs (`UI_FEATURES.md`, `UX_REDESIGN.md`, `UX_REDESIGN_visual.md`).
+
 ---
 
 ## Design decisions
@@ -173,7 +189,44 @@ A virtual Start node (explicit entry with a ▶ icon) is planned for flows that 
 
 ## Known limitations
 
-- **Zero-width edge between flush-stacked nodes.** The edge exists in the data model but is visually invisible and unclickable when nodes are snapped flush. Not blocking, but edge delete requires workaround (Inspector or direct flow.json edit).
-- **No Inspector Delete button.** Node deletion is keyboard-only (Delete/Backspace). Intentional for now but not surfaced in the UI.
-- **Drag can't be completed via playwright synthetic events.** xyflow uses pointer capture which Playwright's synthetic drag events don't satisfy. Visual verification of snap/drag features requires manual browser testing.
-- **type_mismatch severity asymmetry.** The diagnostic is `warning` but the frontend renders the edge red — the same red as errors. A reader looking at the canvas can't distinguish "structural error" from "type mismatch" without opening the diagnostics panel.
+- **Edge selection doesn't recolor arrowhead.** When an edge is selected, the stroke turns the selection color but the arrowhead marker retains its default color. Being fixed in the current impl-polish pass.
+- **Delete-node cancel doesn't preserve connected edges.** Cancelling out of the delete confirmation still removes edges connected to the node in some cases. Being fixed in the current impl-polish pass.
+- **No undo/redo system.** The biggest structural gap in the editing system. Every mutation writes directly to `flow.json` with no history. Adding undo/redo requires either a command stack on the frontend or a versioned mutation log on the backend. Not in scope for this session.
+- **Zero-width edge between flush-stacked nodes.** The edge exists in the data model but is visually invisible and unclickable when nodes are snapped flush. The fusion visual hides it intentionally (`a7cdf38`); edge delete requires the Inspector or direct `flow.json` edit.
+- **Drag can't be completed via Playwright synthetic events.** xyflow uses pointer capture which Playwright's synthetic drag events don't satisfy. Visual verification of snap/drag features requires manual browser testing.
+- **type_mismatch severity asymmetry.** The diagnostic is `warning` but the frontend renders the edge red — the same as structural errors. A reader can't distinguish the two without opening the diagnostics panel.
+
+---
+
+## Handoff to next agent session
+
+The branch is `feat/subflows-chains-ui`. Backend tests: `uv run pytest -q` (116 passing). Frontend build: `npm run build` in `frontend/`.
+
+### Where to find context
+
+| What | Where |
+|---|---|
+| Milestone scope | `docs/SPEC.md` |
+| Session history + reasoning | `docs/CHANGES_2026-04.md` (this file) |
+| Forward UI design | `docs/EDITOR_MERGE.md` |
+| Node/attachment model | `docs/NODE_TAXONOMY.md` |
+| Sticky notes | `docs/ANNOTATIONS.md` |
+| Sidebar activity bar | `docs/SIDEBAR.md` |
+
+### Team conventions
+
+- **impl-structure** — backend (`dagsmith/`), app state, `App.tsx`, Inspector, API layer
+- **impl-polish** — canvas rendering (`FlowGraph`, `WorkflowNode`, `DockviewCanvas`), visual fixes, animations
+- **verifier** — browser verification via Playwright; takes screenshots, validates visual state
+
+### Remaining work (forward plan)
+
+1. **Full editor-merge implementation** — preview-tab on node selection, Inspector-into-editor header, attachment config inline. Specified in `EDITOR_MERGE.md`; not yet started.
+2. **Undo/redo** — biggest structural gap. No design yet.
+3. **Start node** — virtual ▶ entry node. Backend: new `kind: "start"`. Frontend: distinct rendering.
+4. **Action node** — `kind: "action"` flag, side-arrow rendering for chained actions.
+5. **Storage attachment** — toggle + local store + replay mode. Near-shippable per `NODE_TAXONOMY.md`.
+6. **Sticky notes** — free-floating Markdown on canvas, stored in `layout.sticky_notes`. Specified in `ANNOTATIONS.md`.
+7. **Activity bar sidebar** — swap current stacked sidebar for VS Code-style icon strip. Specified in `SIDEBAR.md`.
+8. **M7 drag-and-drop types** — types palette drag targets (node input, exit port, edge). Per original `SPEC.md`.
+9. **M8 group folding + Playwright baseline** — per original `SPEC.md`.
