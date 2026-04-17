@@ -47,3 +47,40 @@
 :global(.react-flow__node.selected) {
   outline: none !important;
 }
+
+.edgeDeleteBtn {
+  width: 16px;
+  height: 16px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: 2px;
+  color: var(--fg-1);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+  pointer-events: all;
+  font-family: var(--font-mono);
+}
+
+.edgeDeleteBtn:hover {
+  background: var(--red, #e05252);
+  border-color: var(--red, #e05252);
+  color: #fff;
+}
+
+.edgeEndpointHandle {
+  width: 9px;
+  height: 9px;
+  background: var(--selection);
+  border: 1.5px solid var(--bg-0);
+  border-radius: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  cursor: crosshair;
+}

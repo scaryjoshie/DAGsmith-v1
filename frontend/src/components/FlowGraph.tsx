@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
+  BaseEdge,
+  EdgeLabelRenderer,
   MarkerType,
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  getSmoothStepPath,
   reconnectEdge,
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeProps,
   type NodeChange,
   type Viewport,
 } from '@xyflow/react';
@@ -20,6 +24,71 @@ import type { FlowView } from '../types';
 import styles from './FlowGraph.module.css';
 
 const nodeTypes = { workflow: WorkflowNode };
+
+// Context so SelectableEdge can call the delete handler without prop-drilling through edgeTypes.
+const EdgeDeleteContext = createContext<((fromNode: string, fromExit: string) => void) | null>(null);
+
+function SelectableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  selected,
+  data,
+  markerEnd,
+  style,
+}: EdgeProps) {
+  const onDeleteEdge = useContext(EdgeDeleteContext);
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition,
+  });
+
+  const isSelected = !!selected;
+  const edgeStyle = isSelected
+    ? { ...style, stroke: 'var(--selection)', strokeWidth: 2.5 }
+    : style;
+
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} style={edgeStyle} markerEnd={markerEnd} />
+      {isSelected && (
+        <EdgeLabelRenderer>
+          {/* Endpoint handles — visual affordance for drag-to-reconnect */}
+          <div
+            className={styles.edgeEndpointHandle}
+            style={{ left: sourceX, top: sourceY, position: 'absolute' }}
+          />
+          <div
+            className={styles.edgeEndpointHandle}
+            style={{ left: targetX, top: targetY, position: 'absolute' }}
+          />
+          {/* × delete badge at midpoint */}
+          <button
+            className={styles.edgeDeleteBtn}
+            style={{ position: 'absolute', left: labelX, top: labelY }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDeleteEdge && data) {
+                const fromNode = (data as { fromNode: string; fromExit: string }).fromNode;
+                const fromExit = (data as { fromNode: string; fromExit: string }).fromExit;
+                onDeleteEdge(fromNode, fromExit);
+              }
+            }}
+            title="Delete edge"
+          >
+            ×
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = { selectable: SelectableEdge };
 
 const Y_SPACING = 160;
 const X_SPACING = 260;
@@ -78,7 +147,15 @@ function FlowGraphInner({
     const prevIds = prevNodeIdsRef.current;
     const newNode = initial.nodes.find((n) => !prevIds.has(n.id));
     prevNodeIdsRef.current = new Set(initial.nodes.map((n) => n.id));
-    setNodes(initial.nodes);
+    // Preserve current positions for existing nodes so edge mutations don't
+    // trigger BFS re-layout and jump nodes that haven't been persisted yet.
+    setNodes((current) => {
+      const currentPos = new Map(current.map((n) => [n.id, n.position]));
+      return initial.nodes.map((n) => {
+        const pos = currentPos.get(n.id);
+        return pos ? { ...n, position: pos } : n;
+      });
+    });
     if (newNode) {
       // Pan to the new node without resetting zoom or moving existing nodes.
       requestAnimationFrame(() => {
@@ -280,48 +357,65 @@ function FlowGraphInner({
     [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap],
   );
 
-  const decoratedEdges = useMemo(() => edges, [edges]);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
+  const decoratedEdges = useMemo(
+    () => edges.map((e) => e.id === selectedEdgeId ? { ...e, selected: true } : e),
+    [edges, selectedEdgeId],
+  );
 
   return (
-    <div className={styles.root}>
-      <div className={styles.canvas}>
-        <ReactFlow
-          nodes={decoratedNodes}
-          edges={decoratedEdges}
-          nodeTypes={nodeTypes}
-          defaultViewport={cachedViewport}
-          fitView={!cachedViewport}
-          fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
-          onViewportChange={handleViewportChange}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable
-          nodesConnectable
-          snapToGrid
-          snapGrid={[16, 16]}
-          deleteKeyCode={['Delete', 'Backspace']}
-          onNodesChange={handleNodesChange}
-          onConnect={onConnect}
-          onNodesDelete={handleNodesDelete}
-          onEdgesDelete={handleEdgesDelete}
-          onReconnect={handleReconnect}
-          onNodeClick={(_, node) => {
-            if (node.id.startsWith('exit:')) {
+    <EdgeDeleteContext.Provider value={onDeleteEdge}>
+      <div className={styles.root}>
+        <div className={styles.canvas}>
+          <ReactFlow
+            nodes={decoratedNodes}
+            edges={decoratedEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultViewport={cachedViewport}
+            fitView={!cachedViewport}
+            fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+            onViewportChange={handleViewportChange}
+            proOptions={{ hideAttribution: true }}
+            nodesDraggable
+            nodesConnectable
+            edgesFocusable
+            snapToGrid
+            snapGrid={[16, 16]}
+            deleteKeyCode={['Delete', 'Backspace']}
+            onNodesChange={handleNodesChange}
+            onConnect={onConnect}
+            onNodesDelete={handleNodesDelete}
+            onEdgesDelete={handleEdgesDelete}
+            onReconnect={handleReconnect}
+            onEdgeClick={(_, edge) => {
+              setSelectedEdgeId((prev) => prev === edge.id ? null : edge.id);
               onSelectNode(null);
-            } else {
-              onSelectNode(node.id);
-            }
-          }}
-          onPaneClick={() => onSelectNode(null)}
-        >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={1.5}
-            color="#3a3d4a"
-          />
-        </ReactFlow>
+            }}
+            onNodeClick={(_, node) => {
+              setSelectedEdgeId(null);
+              if (node.id.startsWith('exit:')) {
+                onSelectNode(null);
+              } else {
+                onSelectNode(node.id);
+              }
+            }}
+            onPaneClick={() => {
+              setSelectedEdgeId(null);
+              onSelectNode(null);
+            }}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={16}
+              size={1.5}
+              color="#3a3d4a"
+            />
+          </ReactFlow>
+        </div>
       </div>
-    </div>
+    </EdgeDeleteContext.Provider>
   );
 }
 
@@ -397,12 +491,13 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
     sourceHandle: edge.from_exit,
     target: edge.to_node ?? `exit:${edge.to_flow_exit!}`,
     targetHandle: 'in',
+    type: 'selectable',
+    data: { fromNode: edge.from_node, fromExit: edge.from_exit },
     label: edge.from_exit === 'out' ? undefined : edge.from_exit,
     labelStyle: { fill: '#c9cdd5', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, monospace' },
     labelBgStyle: { fill: '#0a0a0a' },
     labelBgPadding: [4, 2] as [number, number],
     labelBgBorderRadius: 2,
-    type: 'smoothstep',
     style: { stroke: '#6b7080', strokeWidth: 1.6 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
@@ -410,6 +505,7 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
       width: 22,
       height: 22,
     },
+    interactionWidth: 20,
   }));
 
   return { nodes, edges };
