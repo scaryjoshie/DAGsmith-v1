@@ -88,6 +88,16 @@
   background: var(--fg-2);
   border: 1px solid var(--fg-2);
   border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.process:hover .handle {
+  opacity: 1;
+}
+
+.handleVisible {
+  opacity: 1 !important;
 }
 
 .handle:hover {
@@ -140,6 +150,12 @@
   border-radius: 0;
   left: 50% !important;
   transform: translate(-50%, 50%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.process:hover .switcherHandle {
+  opacity: 1;
 }
 
 .switcherHandle:hover {
