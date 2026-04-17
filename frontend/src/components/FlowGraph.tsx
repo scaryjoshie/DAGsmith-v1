@@ -446,9 +446,11 @@ function FlowGraphInner({
   // Detect flush-stacked pairs: node A bottom is flush with node B top.
   // snappedAbove = this node has another node flush-stacked below it.
   // snappedBelow = this node is flush-stacked on top of another node.
+  // flushPairs = set of "topId|botId" for hiding the connecting edge.
   const stackFlags = useMemo(() => {
-    const above = new Set<string>(); // node has a stacked child below
-    const below = new Set<string>(); // node is stacked on top of a parent
+    const above = new Set<string>();
+    const below = new Set<string>();
+    const flushPairs = new Set<string>();
     for (let i = 0; i < nodes.length; i++) {
       for (let j = 0; j < nodes.length; j++) {
         if (i === j) continue;
@@ -461,10 +463,11 @@ function FlowGraphInner({
         if (dy <= FLUSH_TOLERANCE && dx <= FLUSH_TOLERANCE) {
           above.add(top.id);
           below.add(bot.id);
+          flushPairs.add(`${top.id}|${bot.id}`);
         }
       }
     }
-    return { above, below };
+    return { above, below, flushPairs };
   }, [nodes]);
 
   const decoratedNodes = useMemo(
@@ -499,7 +502,12 @@ function FlowGraphInner({
 
   const decoratedEdges = useMemo(
     () => edges.map((e, idx) => {
+      // Selected always wins — show even if flush-stacked.
       if (e.id === selectedEdgeId) return { ...e, selected: true };
+      // Hide edge when its endpoints are flush-stacked (the shared border IS the visual connector).
+      if (stackFlags.flushPairs.has(`${e.source}|${e.target}`)) {
+        return { ...e, hidden: true };
+      }
       if (mismatchEdgeIndices.has(idx)) {
         return {
           ...e,
@@ -510,7 +518,7 @@ function FlowGraphInner({
       }
       return e;
     }),
-    [edges, selectedEdgeId, mismatchEdgeIndices],
+    [edges, selectedEdgeId, mismatchEdgeIndices, stackFlags.flushPairs],
   );
 
   return (
