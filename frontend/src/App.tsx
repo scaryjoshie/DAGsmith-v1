@@ -167,17 +167,17 @@ export default function App() {
     </>
   );
 
-  const inspector = (
+  const inspector = selectedNode ? (
     <Inspector
       selectedNode={selectedNode}
       flow={selectedFlow}
       onOpenSource={handleOpenSource}
     />
-  );
+  ) : undefined;
 
   return (
     <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect }}>
-      <Shell sidebarBody={sidebar} canvas={canvas} inspectorBody={inspector} />
+      <Shell sidebarBody={sidebar} canvas={canvas} bottomPanel={inspector} />
       {showAddDialog && activeFlow && (
         <AddNodeDialog
           workspace={activeFlow.workspaceName}
