@@ -272,7 +272,7 @@ export default function App() {
 
   return (
     <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutatedWithView }}>
-      <Shell sidebarBody={sidebar} canvas={canvas} bottomPanel={inspector} />
+      <Shell sidebarBody={sidebar} canvas={canvas} rightPanel={inspector} />
       {preflightOpen && activeFlow && activeFlowView && (
         <RunPreflightModal
           flowId={activeFlow.flowId}

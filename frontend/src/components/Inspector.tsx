@@ -411,8 +411,11 @@ export function Inspector({
   if (!node) {
     return (
       <div className={styles.root}>
+        <div className={styles.panelHeader}>
+          <span className={styles.panelTitle}>Inspector</span>
+          <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
+        </div>
         <div className={styles.loading}>loading…</div>
-        <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
       </div>
     );
   }
@@ -426,45 +429,30 @@ export function Inspector({
 
   return (
     <div className={styles.root}>
-      {diagOpen && nodeDiags.length > 0 && (
-        <div ref={diagPopoverRef} className={styles.diagPopover}>
-          {nodeDiags.map((d) => (
-            <div key={d.id} className={styles.diagPopoverRow}>
-              <span className={`${styles.diagDot} ${d.severity === 'error' ? styles.diagDotError : d.severity === 'warning' ? styles.diagDotWarn : styles.diagDotInfo}`} />
-              <span className={styles.diagPopoverMsg} title={d.message}>{d.message}</span>
-              {d.source_location && (
-                <span className={styles.diagPopoverLoc}>
-                  {(d.source_location as { file?: string; line?: number }).line != null
-                    ? `line ${(d.source_location as { line: number }).line}`
-                    : ''}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <div className={styles.identity}>
+      <div className={styles.panelHeader}>
         <span className={styles.kindChip}>{node.kind}</span>
-        <input
-          ref={nameInputRef}
-          className={nameError ? `${styles.editInput} ${styles.editInputError}` : styles.editInput}
-          value={nameValue}
-          disabled={nameBusy}
-          title={nameError ?? node.name}
-          onChange={(e) => { setNameValue(e.target.value); setNameError(null); }}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.currentTarget.blur(); }
-            else if (e.key === 'Escape') {
-              nameCancelledRef.current = true;
-              setNameValue(selectedNode.nodeId);
-              setNameError(null);
-              e.currentTarget.blur();
-            }
-          }}
-          aria-label="Node name"
-          spellCheck={false}
-        />
+        <span className={styles.panelTitle}>
+          <input
+            ref={nameInputRef}
+            className={nameError ? `${styles.nameInput} ${styles.editInputError}` : styles.nameInput}
+            value={nameValue}
+            disabled={nameBusy}
+            title={nameError ?? node.name}
+            onChange={(e) => { setNameValue(e.target.value); setNameError(null); }}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.currentTarget.blur(); }
+              else if (e.key === 'Escape') {
+                nameCancelledRef.current = true;
+                setNameValue(selectedNode.nodeId);
+                setNameError(null);
+                e.currentTarget.blur();
+              }
+            }}
+            aria-label="Node name"
+            spellCheck={false}
+          />
+        </span>
         {worstSeverity && (
           <button
             type="button"
@@ -476,11 +464,26 @@ export function Inspector({
             ● {nodeDiags.length}
           </button>
         )}
+        <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
       </div>
 
+      {diagOpen && nodeDiags.length > 0 && (
+        <div ref={diagPopoverRef} className={styles.diagList}>
+          {nodeDiags.map((d) => (
+            <div key={d.id} className={styles.diagRow}>
+              <span className={`${styles.diagDot} ${d.severity === 'error' ? styles.diagDotError : d.severity === 'warning' ? styles.diagDotWarn : styles.diagDotInfo}`} />
+              <span className={styles.diagMsg}>{d.message}</span>
+              {d.source_location && (d.source_location as { line?: number }).line != null && (
+                <span className={styles.diagLoc}>line {(d.source_location as { line: number }).line}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className={styles.fields}>
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>input</span>
+        <div className={styles.fieldRow}>
+          <span className={styles.fieldLabel}>INPUT</span>
           <EditField
             value={inputValue}
             original={node.input_type}
@@ -493,8 +496,8 @@ export function Inspector({
           />
         </div>
 
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>ref</span>
+        <div className={styles.fieldRow}>
+          <span className={styles.fieldLabel}>REF</span>
           <EditField
             value={refValue}
             original={node.ref}
@@ -507,9 +510,9 @@ export function Inspector({
           />
         </div>
 
-        <div className={`${styles.field} ${styles.exitsField}`}>
-          <span className={styles.fieldLabel}>exits</span>
-          <div className={styles.exitPills}>
+        <div className={styles.fieldRow}>
+          <span className={styles.fieldLabel}>EXITS</span>
+          <div className={styles.exitList}>
             {exits.map(([name, type]) => (
               <ExitPill
                 key={name}
@@ -566,8 +569,6 @@ export function Inspector({
           </button>
         ) : null}
       </div>
-
-      <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
     </div>
   );
 }

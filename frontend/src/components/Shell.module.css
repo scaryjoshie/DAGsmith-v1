@@ -3,7 +3,7 @@
   height: 100vh;
   background: var(--bg-0);
   display: grid;
-  grid-template-columns: var(--sidebar-width, 232px) 1fr;
+  grid-template-columns: var(--sidebar-width, 232px) 1fr var(--inspector-width, 0px);
   color: var(--fg-0);
   overflow: hidden;
 }
@@ -109,6 +109,34 @@
   background: var(--bg-0);
 }
 
+.inspectorPanel {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-0);
+  border-left: 1px solid var(--border-0);
+  position: relative;
+  overflow: hidden;
+}
+
+.inspectorResizer {
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 1;
+  background: transparent;
+}
+
+.inspectorResizer:hover,
+.inspectorResizer.resizing {
+  background: var(--border-2);
+}
+
 .canvasArea {
   flex: 1;
   min-height: 0;
@@ -119,12 +147,6 @@
   background: var(--bg-0);
 }
 
-.bottomPanel {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border-0);
-  background: var(--bg-0);
-  overflow: hidden;
-}
 
 .runButton {
   background: var(--fg-0);
