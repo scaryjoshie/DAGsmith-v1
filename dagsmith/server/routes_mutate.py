@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+
+_IDENTIFIER_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
 from ..diagnostics import UnresolvableRef
 from ..workspace import WorkspaceError
@@ -233,6 +236,11 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
             new_name = request.new_name.strip()
             if not new_name:
                 raise HTTPException(status_code=400, detail="new_name must not be empty")
+            if not _IDENTIFIER_RE.match(new_name):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"invalid node name {new_name!r}: must be a valid Python identifier (letters, digits, underscores; no spaces or special characters)",
+                )
             if new_name != node_name:
                 if new_name in nodes:
                     raise HTTPException(
@@ -412,10 +420,13 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
         layout = data.get("layout")
         if not isinstance(layout, dict):
             layout = {}
-        layout["nodes"] = {
-            node_name: {"x": pos.x, "y": pos.y}
-            for node_name, pos in request.nodes.items()
-        }
+        if request.nodes:
+            layout["nodes"] = {
+                node_name: {"x": pos.x, "y": pos.y}
+                for node_name, pos in request.nodes.items()
+            }
+        if request.exits is not None:
+            layout["exits"] = dict(request.exits)
         data["layout"] = layout
 
         write_flow_json(path, data)

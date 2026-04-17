@@ -36,6 +36,7 @@ export interface NodeLayoutPosition {
 
 export interface FlowLayout {
   nodes?: Record<string, NodeLayoutPosition>;
+  exits?: Record<string, string[]>;
   [key: string]: unknown;
 }
 

@@ -113,7 +113,8 @@ class NodeLayoutPosition(BaseModel):
 
 
 class UpdateLayoutRequest(BaseModel):
-    nodes: dict[str, NodeLayoutPosition]
+    nodes: dict[str, NodeLayoutPosition] = Field(default_factory=dict)
+    exits: dict[str, list[str]] | None = None
 
 
 class UpdateLayoutResponse(BaseModel):

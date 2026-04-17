@@ -11,6 +11,7 @@ import {
 } from '../api';
 import type { FlowView, LayoutPositions } from '../types';
 import { useSelection } from '../SelectionContext';
+import { registerFlowRefetch } from '../App';
 import styles from './FlowPanel.module.css';
 
 export interface FlowPanelParams {
@@ -56,6 +57,11 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
       setLoadError((e as Error).message);
     }
   }, [workspaceName, flowId]);
+
+  // Register refetch so Inspector mutations can trigger canvas refresh.
+  useEffect(() => {
+    return registerFlowRefetch(flowId, () => { void refetchFlow(); });
+  }, [flowId, refetchFlow]);
 
   const handleConnect = useCallback(async (connection: Connection) => {
     if (!flow || !connection.source || !connection.target) return;
@@ -129,6 +135,18 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
     }, LAYOUT_DEBOUNCE_MS);
   }, [workspaceName, flowId, showMutationError]);
 
+  const handleExitsReorder = useCallback(async (nodeId: string, newOrder: string[]) => {
+    if (!flow) return;
+    const currentExits = (flow.layout?.exits ?? {}) as Record<string, string[]>;
+    const updatedExits = { ...currentExits, [nodeId]: newOrder };
+    try {
+      await updateLayout(workspaceName, flowId, {}, updatedExits);
+      setFlow(await getFlow(workspaceName, flowId));
+    } catch (e) {
+      showMutationError((e as Error).message);
+    }
+  }, [workspaceName, flowId, flow, showMutationError]);
+
   const handleSelectNode = useCallback((nodeId: string | null) => {
     onNodeSelect(nodeId ? { nodeId, flowId, workspaceName } : null);
   }, [onNodeSelect, flowId, workspaceName]);
@@ -177,6 +195,7 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
         onDeleteEdge={handleDeleteEdge}
         onNodePositionChange={handleNodePositionChange}
         onReconnectEdge={handleReconnectEdge}
+        onExitsReorder={handleExitsReorder}
       />
     </div>
   );

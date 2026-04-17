@@ -165,14 +165,15 @@ export function deleteEdge(
 export function updateLayout(
   workspace: string,
   flowId: string,
-  positions: LayoutPositions
+  positions: LayoutPositions,
+  exits?: Record<string, string[]>
 ): Promise<LayoutUpdateResponse> {
   return request<LayoutUpdateResponse>(
     `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/layout`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodes: positions }),
+      body: JSON.stringify({ nodes: positions, ...(exits !== undefined ? { exits } : {}) }),
     }
   );
 }

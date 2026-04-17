@@ -137,6 +137,15 @@
   color: var(--fg-0);
 }
 
+.switcherCellDragging {
+  opacity: 0.4;
+}
+
+.switcherCellDropTarget {
+  background: var(--bg-3);
+  border-left: 2px solid var(--selection);
+}
+
 .switcherLabel {
   display: block;
   pointer-events: none;

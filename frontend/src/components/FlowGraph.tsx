@@ -43,6 +43,7 @@ interface FlowGraphProps {
   onDeleteEdge: (fromNode: string, fromExit: string) => void;
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
   onReconnectEdge: (fromNode: string, fromExit: string, newConnection: Connection) => void;
+  onExitsReorder: (nodeId: string, newOrder: string[]) => void;
 }
 
 export function FlowGraph(props: FlowGraphProps) {
@@ -61,6 +62,7 @@ function FlowGraphInner({
   onDeleteEdge,
   onNodePositionChange,
   onReconnectEdge,
+  onExitsReorder,
 }: FlowGraphProps) {
   const { fitView } = useReactFlow();
   const initial = useMemo(() => layoutFlow(flow), [flow]);
@@ -209,13 +211,20 @@ function FlowGraphInner({
     [flow.id],
   );
 
+  const layoutExits = flow.layout?.exits as Record<string, string[]> | undefined;
+
   const decoratedNodes = useMemo(
     () =>
       nodes.map((n) => ({
         ...n,
-        data: { ...n.data, snapTarget: n.id === snapTargetId },
+        data: {
+          ...n.data,
+          snapTarget: n.id === snapTargetId,
+          exitOrder: layoutExits?.[n.id],
+          onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
+        },
       })),
-    [nodes, snapTargetId],
+    [nodes, snapTargetId, layoutExits, onExitsReorder],
   );
 
   const decoratedEdges = useMemo(() => {
