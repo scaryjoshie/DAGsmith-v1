@@ -8,6 +8,7 @@ import {
   applyNodeChanges,
   reconnectEdge,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type NodeChange,
@@ -44,6 +45,7 @@ interface FlowGraphProps {
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
   onReconnectEdge: (fromNode: string, fromExit: string, newConnection: Connection) => void;
   onExitsReorder: (nodeId: string, newOrder: string[]) => void;
+  onReady?: (panToNode: (nodeId: string) => void) => void;
 }
 
 export function FlowGraph(props: FlowGraphProps) {
@@ -63,8 +65,9 @@ function FlowGraphInner({
   onNodePositionChange,
   onReconnectEdge,
   onExitsReorder,
+  onReady,
 }: FlowGraphProps) {
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter, getNode } = useReactFlow();
   const initial = useMemo(() => layoutFlow(flow), [flow]);
   const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
   const [edges, setEdges] = useState<Edge[]>(initial.edges);
@@ -72,20 +75,40 @@ function FlowGraphInner({
   const snapTargetRef = useRef<string | null>(null);
   snapTargetRef.current = snapTargetId;
   const prevNodeCountRef = useRef(initial.nodes.length);
+  const [pendingFit, setPendingFit] = useState(false);
+  const nodesInitialized = useStore((s) => s.nodesInitialized);
 
   useEffect(() => {
     const newCount = initial.nodes.length;
     if (newCount > prevNodeCountRef.current) {
-      // Node was added — fit view to show the new node
-      requestAnimationFrame(() => fitView({ padding: 0.15, maxZoom: 1 }));
+      setPendingFit(true);
     }
     prevNodeCountRef.current = newCount;
     setNodes(initial.nodes);
-  }, [initial.nodes, fitView]);
+  }, [initial.nodes]);
+
+  useEffect(() => {
+    if (pendingFit && nodesInitialized) {
+      setPendingFit(false);
+      fitView({ padding: 0.15, maxZoom: 1 });
+    }
+  }, [pendingFit, nodesInitialized, fitView]);
 
   useEffect(() => {
     setEdges(initial.edges);
   }, [initial.edges]);
+
+  // Expose panToNode to parent (FlowPanel → panToNodeRegistry).
+  useEffect(() => {
+    if (!onReady) return;
+    onReady((nodeId: string) => {
+      const node = getNode(nodeId);
+      if (!node) return;
+      const x = node.position.x + (node.measured?.width ?? 160) / 2;
+      const y = node.position.y + (node.measured?.height ?? 40) / 2;
+      setCenter(x, y, { zoom: 1, duration: 400 });
+    });
+  }, [onReady, setCenter, getNode]);
 
   const findSnapCandidate = useCallback(
     (draggedId: string, dragged: { x: number; y: number }, pool: WorkflowNodeType[]): string | null => {

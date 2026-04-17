@@ -34,6 +34,15 @@ export function registerFlowRefetch(flowId: string, refetch: () => void): () => 
   return () => flowRefetchRegistry.delete(flowId);
 }
 
+// Registry of pan-to-node callbacks keyed by flowId — FlowPanel registers on mount.
+type PanToNodeRegistry = Map<string, (nodeId: string) => void>;
+const panToNodeRegistry: PanToNodeRegistry = new Map();
+
+export function registerPanToNode(flowId: string, pan: (nodeId: string) => void): () => void {
+  panToNodeRegistry.set(flowId, pan);
+  return () => panToNodeRegistry.delete(flowId);
+}
+
 export default function App() {
   const [workspaceName, setWorkspaceName] = useState(readWorkspaceFromURL);
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null);
@@ -43,11 +52,9 @@ export default function App() {
   const [runPanelOpen, setRunPanelOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<FlowView | null>(null);
+  const [activeFlowView, setActiveFlowView] = useState<FlowView | null>(null);
   const dockviewApiRef = useRef<DockviewApi | null>(null);
 
-  const handleFlowMutated = useCallback((_workspaceName: string, flowId: string) => {
-    flowRefetchRegistry.get(flowId)?.();
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +106,26 @@ export default function App() {
     setWorkspaceName(newName);
   }
 
+  // Fetch activeFlowView whenever active panel changes (for sidebar diagnostics).
+  useEffect(() => {
+    if (!activeFlow) { setActiveFlowView(null); return; }
+    let cancelled = false;
+    getFlow(activeFlow.workspaceName, activeFlow.flowId)
+      .then((f) => { if (!cancelled) setActiveFlowView(f); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeFlow]);
+
+  // When FlowPanel refetches (mutation), also refresh activeFlowView.
+  const handleFlowMutatedWithView = useCallback((_workspaceName: string, flowId: string) => {
+    flowRefetchRegistry.get(flowId)?.();
+    if (activeFlow?.flowId === flowId) {
+      getFlow(activeFlow.workspaceName, flowId)
+        .then(setActiveFlowView)
+        .catch(() => {});
+    }
+  }, [activeFlow]);
+
   const handleActivePanelChange = useCallback((params: FlowPanelParams | null) => {
     setActiveFlow(params);
     // Clear selection when active panel changes
@@ -109,6 +136,11 @@ export default function App() {
       setShowAddDialog(false);
     }
   }, []);
+
+  const handlePanToNode = useCallback((nodeId: string) => {
+    if (!activeFlow) return;
+    panToNodeRegistry.get(activeFlow.flowId)?.(nodeId);
+  }, [activeFlow]);
 
   const handleOpenFlow = useCallback((flowId: string) => {
     const api = dockviewApiRef.current;
@@ -155,10 +187,13 @@ export default function App() {
       workspaceName={workspaceName}
       workspace={workspace}
       allWorkspaces={allWorkspaces}
+      activeFlowView={activeFlowView}
       onWorkspaceChange={handleWorkspaceChange}
       onOpenFlow={handleOpenFlow}
       onRunClick={() => setRunPanelOpen((v) => !v)}
       onAddNodeClick={() => setShowAddDialog(true)}
+      onPanToNode={handlePanToNode}
+      onNodeSelect={handleNodeSelect}
       canRun={!!activeFlow}
       canAddNode={!!workspace && !!activeFlow}
     />
@@ -212,14 +247,17 @@ export default function App() {
   ) : undefined;
 
   return (
-    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutated }}>
+    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutatedWithView }}>
       <Shell sidebarBody={sidebar} canvas={canvas} bottomPanel={inspector} />
       {showAddDialog && activeFlow && (
         <AddNodeDialog
           workspace={activeFlow.workspaceName}
           flowId={activeFlow.flowId}
           onClose={() => setShowAddDialog(false)}
-          onCreated={() => setShowAddDialog(false)}
+          onCreated={() => {
+            setShowAddDialog(false);
+            if (activeFlow) handleFlowMutatedWithView(activeFlow.workspaceName, activeFlow.flowId);
+          }}
         />
       )}
     </SelectionContext.Provider>
