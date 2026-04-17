@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { renameNode } from '../api';
 import type { FlowView } from '../types';
 import type { SelectedNode } from '../SelectionContext';
 import styles from './Inspector.module.css';
@@ -8,12 +9,25 @@ interface InspectorProps {
   flow: FlowView | null;
   onOpenSource: (nodeId: string, split: boolean) => void;
   onDismiss: () => void;
+  onNodeRenamed: (oldName: string, newName: string) => void;
 }
 
-export function Inspector({ selectedNode, flow, onOpenSource, onDismiss }: InspectorProps) {
+export function Inspector({ selectedNode, flow, onOpenSource, onDismiss, onNodeRenamed }: InspectorProps) {
+  const node = flow?.nodes[selectedNode.nodeId];
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync rename field with node name changes
+  useEffect(() => {
+    setRenameValue(node?.name ?? selectedNode.nodeId);
+    setRenameError(null);
+  }, [node?.name, selectedNode.nodeId]);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && document.activeElement !== inputRef.current) {
         e.preventDefault();
         onDismiss();
       }
@@ -22,7 +36,25 @@ export function Inspector({ selectedNode, flow, onOpenSource, onDismiss }: Inspe
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onDismiss]);
 
-  const node = flow?.nodes[selectedNode.nodeId];
+  async function commitRename() {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === selectedNode.nodeId) {
+      setRenameValue(selectedNode.nodeId);
+      setRenameError(null);
+      return;
+    }
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      await renameNode(selectedNode.workspaceName, selectedNode.flowId, selectedNode.nodeId, trimmed);
+      onNodeRenamed(selectedNode.nodeId, trimmed);
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : String(err));
+      setRenameValue(selectedNode.nodeId);
+    } finally {
+      setRenaming(false);
+    }
+  }
 
   if (!node) {
     return (
@@ -37,10 +69,23 @@ export function Inspector({ selectedNode, flow, onOpenSource, onDismiss }: Inspe
   const isSubflow = node.kind === 'flow';
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} title={renameError ?? undefined}>
       <div className={styles.identity}>
         <span className={styles.kindChip}>{node.kind}</span>
-        <span className={styles.name}>{node.name}</span>
+        <input
+          ref={inputRef}
+          className={renameError ? `${styles.nameInput} ${styles.nameInputError}` : styles.nameInput}
+          value={renameValue}
+          disabled={renaming}
+          onChange={(e) => { setRenameValue(e.target.value); setRenameError(null); }}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.currentTarget.blur(); }
+            else if (e.key === 'Escape') { setRenameValue(selectedNode.nodeId); setRenameError(null); e.currentTarget.blur(); }
+          }}
+          aria-label="Node name"
+          spellCheck={false}
+        />
       </div>
 
       <div className={styles.fields}>

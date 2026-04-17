@@ -149,6 +149,10 @@ class GroupCreateRequest(BaseModel):
     label: str = ""
 
 
+class RenameNodeRequest(BaseModel):
+    new_name: str
+
+
 class DiagnosticsResponse(BaseModel):
     diagnostics: list[dict[str, Any]]
 

@@ -109,6 +109,22 @@ export function deleteNode(
   );
 }
 
+export function renameNode(
+  workspace: string,
+  flowId: string,
+  nodeName: string,
+  newName: string
+): Promise<FlowView> {
+  return request<FlowView>(
+    `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeName)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: newName }),
+    }
+  );
+}
+
 export function addEdge(
   workspace: string,
   flowId: string,

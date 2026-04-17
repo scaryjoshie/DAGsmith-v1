@@ -21,6 +21,7 @@ from .schemas import (
     DeleteEdgeRequest,
     FlowView,
     GroupCreateRequest,
+    RenameNodeRequest,
     UpdateLayoutRequest,
     UpdateLayoutResponse,
     UpdateSourceRequest,
@@ -182,6 +183,60 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     )
                 )
             ]
+
+        write_flow_json(path, data)
+        reload_or_500(registry, name)
+        return build_flow_view(registry.get(name), flow_id)
+
+    @router.patch(
+        "/api/workspaces/{name}/flows/{flow_id}/nodes/{node_name}",
+        response_model=FlowView,
+    )
+    def rename_node(
+        name: str, flow_id: str, node_name: str, request: RenameNodeRequest
+    ) -> FlowView:
+        new_name = request.new_name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="new_name must not be empty")
+        ws = get_or_404(registry, name)
+        path, data = read_flow_json(ws, flow_id)
+
+        nodes = data.get("nodes")
+        if not isinstance(nodes, dict) or node_name not in nodes:
+            raise HTTPException(
+                status_code=404,
+                detail=f"node {node_name!r} not found in flow {flow_id!r}",
+            )
+        if new_name == node_name:
+            return build_flow_view(ws, flow_id)
+        if new_name in nodes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"node {new_name!r} already exists in flow {flow_id!r}",
+            )
+
+        # Rename key in nodes dict preserving insertion order.
+        nodes[new_name] = nodes.pop(node_name)
+        data["nodes"] = nodes
+
+        if data.get("entry_node") == node_name:
+            data["entry_node"] = new_name
+
+        edges = data.get("edges")
+        if isinstance(edges, list):
+            for edge in edges:
+                if not isinstance(edge, dict):
+                    continue
+                if edge.get("from_node") == node_name:
+                    edge["from_node"] = new_name
+                if edge.get("to_node") == node_name:
+                    edge["to_node"] = new_name
+
+        layout = data.get("layout")
+        if isinstance(layout, dict):
+            layout_nodes = layout.get("nodes")
+            if isinstance(layout_nodes, dict) and node_name in layout_nodes:
+                layout_nodes[new_name] = layout_nodes.pop(node_name)
 
         write_flow_json(path, data)
         reload_or_500(registry, name)

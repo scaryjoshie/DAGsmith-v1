@@ -36,14 +36,37 @@
   flex-shrink: 0;
 }
 
-.name {
+.nameInput {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--fg-0);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  padding: 2px 5px;
+  min-width: 0;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.nameInput:hover {
+  border-color: var(--border-1);
+}
+
+.nameInput:focus {
+  border-color: var(--border-2);
+  background: var(--bg-1);
+}
+
+.nameInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nameInputError {
+  border-color: #e05252 !important;
 }
 
 .fields {
