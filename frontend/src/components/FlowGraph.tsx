@@ -192,10 +192,10 @@ function FlowGraphInner({
         const exits = candidate.data.exits;
         if (!exits || exits.length !== 1) continue;
         const exitName = exits[0];
-        const alreadyBound = flow.edges.some(
+        const boundEdge = flow.edges.find(
           (e) => e.from_node === candidate.id && e.from_exit === exitName,
         );
-        if (alreadyBound) continue;
+        if (boundEdge && boundEdge.to_node !== draggedId) continue;
 
         const candHeight = candidate.measured?.height ?? FALLBACK_NODE_HEIGHT;
         const expectedTop = candidate.position.y + candHeight;
@@ -244,12 +244,17 @@ function FlowGraphInner({
                 };
               }
               const exitName = target.data.exits?.[0] ?? 'out';
-              onConnect({
-                source: target.id,
-                sourceHandle: exitName,
-                target: change.id,
-                targetHandle: 'in',
-              });
+              const edgeExists = flow.edges.some(
+                (e) => e.from_node === target.id && e.from_exit === exitName && e.to_node === change.id,
+              );
+              if (!edgeExists) {
+                onConnect({
+                  source: target.id,
+                  sourceHandle: exitName,
+                  target: change.id,
+                  targetHandle: 'in',
+                });
+              }
               if (!change.id.startsWith('exit:')) {
                 onNodePositionChange(change.id, snappedX, snappedY);
               }
