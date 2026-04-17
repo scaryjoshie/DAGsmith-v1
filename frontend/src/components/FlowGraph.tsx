@@ -122,6 +122,8 @@ function FlowGraphInner({
           proOptions={{ hideAttribution: true }}
           nodesDraggable
           nodesConnectable
+          snapToGrid
+          snapGrid={[16, 16]}
           deleteKeyCode={['Delete', 'Backspace']}
           onNodesChange={handleNodesChange}
           onConnect={onConnect}
