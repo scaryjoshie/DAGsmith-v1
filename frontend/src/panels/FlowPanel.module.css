@@ -6,46 +6,4 @@
   flex-direction: column;
 }
 
-.errorToast {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  background: var(--bg-1);
-  border: 1px solid var(--red, #e05252);
-  border-radius: var(--radius-1);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--red, #e05252);
-  max-width: 480px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-}
 
-.errorToastMsg {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.errorToastClose {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: var(--fg-2);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  padding: 0;
-  line-height: 1;
-}
-
-.errorToastClose:hover {
-  color: var(--fg-0);
-}

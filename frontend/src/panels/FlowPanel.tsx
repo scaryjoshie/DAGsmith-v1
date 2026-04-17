@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Connection } from '@xyflow/react';
 import type { IDockviewPanelProps } from 'dockview';
 import { FlowGraph } from '../components/FlowGraph';
+import { Toast } from '../components/Toast';
 import {
   addEdge,
   deleteEdge,
@@ -26,38 +27,28 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
   const panelId = panelApi.id;
   const { onNodeSelect } = useSelection();
   const [flow, setFlow] = useState<FlowView | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const pendingLayoutRef = useRef<LayoutPositions | null>(null);
   const layoutTimerRef = useRef<number | null>(null);
 
-  const showMutationError = useCallback((msg: string) => {
-    setMutationError(msg);
-    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => {
-      setMutationError(null);
-      toastTimerRef.current = null;
-    }, 5000);
-  }, []);
+  const showToast = useCallback((msg: string) => { setToastMsg(msg); }, []);
 
   useEffect(() => {
     let cancelled = false;
     setFlow(null);
-    setLoadError(null);
     getFlow(workspaceName, flowId)
       .then((f) => { if (!cancelled) setFlow(f); })
-      .catch((e) => { if (!cancelled) setLoadError((e as Error).message); });
+      .catch((e) => { if (!cancelled) showToast((e as Error).message); });
     return () => { cancelled = true; };
-  }, [workspaceName, flowId]);
+  }, [workspaceName, flowId, showToast]);
 
   const refetchFlow = useCallback(async () => {
     try {
       setFlow(await getFlow(workspaceName, flowId));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
     }
-  }, [workspaceName, flowId, showMutationError]);
+  }, [workspaceName, flowId, showToast]);
 
   // Register refetch so Inspector mutations can trigger canvas refresh.
   useEffect(() => {
@@ -80,9 +71,9 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
         to_flow_exit: isExitTarget ? connection.target.slice('exit:'.length) : null,
       }));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
     }
-  }, [workspaceName, flowId, flow, showMutationError]);
+  }, [workspaceName, flowId, flow, showToast]);
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!flow) return;
@@ -93,20 +84,20 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
     try {
       setFlow(await deleteNode(workspaceName, flowId, nodeId));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
       await refetchFlow();
     }
-  }, [workspaceName, flowId, flow, refetchFlow, showMutationError]);
+  }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
   const handleDeleteEdge = useCallback(async (fromNode: string, fromExit: string) => {
     if (!flow) return;
     try {
       setFlow(await deleteEdge(workspaceName, flowId, fromNode, fromExit));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
       await refetchFlow();
     }
-  }, [workspaceName, flowId, flow, refetchFlow, showMutationError]);
+  }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
   const handleReconnectEdge = useCallback(async (fromNode: string, fromExit: string, newConnection: Connection) => {
     if (!flow || !newConnection.source || !newConnection.target) return;
@@ -120,10 +111,10 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
         to_flow_exit: isExitTarget ? newConnection.target.slice('exit:'.length) : null,
       }));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
       await refetchFlow();
     }
-  }, [workspaceName, flowId, flow, refetchFlow, showMutationError]);
+  }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
   const handleNodePositionChange = useCallback((nodeId: string, x: number, y: number) => {
     pendingLayoutRef.current = { ...(pendingLayoutRef.current ?? {}), [nodeId]: { x, y } };
@@ -134,11 +125,11 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
       layoutTimerRef.current = null;
       if (positions) {
         updateLayout(workspaceName, flowId, positions).catch((e) => {
-          showMutationError((e as Error).message);
+          showToast((e as Error).message);
         });
       }
     }, LAYOUT_DEBOUNCE_MS);
-  }, [workspaceName, flowId, showMutationError]);
+  }, [workspaceName, flowId, showToast]);
 
   const handleExitsReorder = useCallback(async (nodeId: string, newOrder: string[]) => {
     if (!flow) return;
@@ -148,50 +139,27 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
       await updateLayout(workspaceName, flowId, {}, updatedExits);
       setFlow(await getFlow(workspaceName, flowId));
     } catch (e) {
-      showMutationError((e as Error).message);
+      showToast((e as Error).message);
     }
-  }, [workspaceName, flowId, flow, showMutationError]);
+  }, [workspaceName, flowId, flow, showToast]);
 
   const handleSelectNode = useCallback((nodeId: string | null) => {
     onNodeSelect(nodeId ? { nodeId, flowId, workspaceName } : null);
   }, [onNodeSelect, flowId, workspaceName]);
 
-  if (loadError && !flow) {
-    return (
-      <div style={{ padding: 16, color: 'var(--red)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-        <div>Error loading flow: {loadError}</div>
-        <div style={{ marginTop: 8, color: 'var(--fg-2)' }}>Is the backend running?</div>
-      </div>
-    );
-  }
-
   if (!flow) {
     return (
       <div style={{ padding: 16, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
-        loading…
+        {toastMsg ? (
+          <Toast message={toastMsg} onDismiss={() => setToastMsg(null)} />
+        ) : 'loading…'}
       </div>
     );
   }
 
   return (
     <div className={styles.panel}>
-      {mutationError && (
-        <div className={styles.errorToast}>
-          <span className={styles.errorToastMsg}>{mutationError}</span>
-          <button
-            className={styles.errorToastClose}
-            onClick={() => {
-              setMutationError(null);
-              if (toastTimerRef.current !== null) {
-                window.clearTimeout(toastTimerRef.current);
-                toastTimerRef.current = null;
-              }
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {toastMsg && <Toast message={toastMsg} onDismiss={() => setToastMsg(null)} />}
       <FlowGraph
         flow={flow}
         onSelectNode={handleSelectNode}
