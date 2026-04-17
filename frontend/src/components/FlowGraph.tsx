@@ -145,8 +145,10 @@ function FlowGraphInner({
   const prevNodeIdsRef = useRef(new Set(initial.nodes.map((n) => n.id)));
 
   // Chain drag: when top of a stacked chain is dragged, move all chain members.
-  // Maps member id → its offset from the dragged node's start position.
-  const chainOffsetsRef = useRef<Map<string, { dx: number; dy: number }>>(new Map());
+  // Maps member id → { parentId, exitName } so we can recompute exact flush positions
+  // from the parent's grid-snapped position rather than from saved offsets (which drift
+  // when node heights aren't multiples of the snap grid).
+  const chainParentRef = useRef<Map<string, { parentId: string }>>(new Map());
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -233,7 +235,7 @@ function FlowGraphInner({
               dragStartPosRef.current = change.position;
               // Collect flush-stacked descendants: follow edges to find children
               // that are geometrically flush-stacked below this node.
-              const offsets = new Map<string, { dx: number; dy: number }>();
+              const parentMap = new Map<string, { parentId: string }>();
               const byId = new Map(current.map((n) => [n.id, n]));
               const visited = new Set<string>([change.id]);
               const queue = [change.id];
@@ -258,22 +260,27 @@ function FlowGraphInner({
                 if (dy > FLUSH_TOLERANCE || dx > FLUSH_TOLERANCE) continue;
                 visited.add(childId);
                 queue.push(childId);
-                offsets.set(childId, {
-                  dx: child.position.x - change.position.x,
-                  dy: child.position.y - change.position.y,
-                });
+                parentMap.set(childId, { parentId });
               }
-              chainOffsetsRef.current = offsets;
+              chainParentRef.current = parentMap;
             }
 
-            // Apply chain delta to all members.
-            if (chainOffsetsRef.current.size > 0) {
-              const pos = change.position;
-              next = next.map((n) => {
-                const offset = chainOffsetsRef.current.get(n.id);
-                if (!offset) return n;
-                return { ...n, position: { x: pos.x + offset.dx, y: pos.y + offset.dy } };
-              });
+            // Apply chain positions by walking parent→child using exact measured heights.
+            // This avoids grid drift: each child is positioned flush below its parent
+            // using the parent's already-grid-snapped position.
+            if (chainParentRef.current.size > 0) {
+              const byId = new Map(next.map((n) => [n.id, n]));
+              for (const [childId, { parentId }] of chainParentRef.current) {
+                const parent = byId.get(parentId);
+                if (!parent) continue;
+                const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
+                const newPos = { x: parent.position.x, y: parent.position.y + ph };
+                const idx = next.findIndex((n) => n.id === childId);
+                if (idx >= 0) {
+                  next = next.map((n, i) => i === idx ? { ...n, position: newPos } : n);
+                  byId.set(childId, { ...byId.get(childId)!, position: newPos });
+                }
+              }
             }
 
             const candidate = findSnapCandidate(change.id, change.position, next);
@@ -286,8 +293,8 @@ function FlowGraphInner({
           const pendingTarget = snapTargetRef.current;
           snapTargetRef.current = null;
           setSnapTargetId(null);
-          const chainOffsets = chainOffsetsRef.current;
-          chainOffsetsRef.current = new Map();
+          const chainParents = chainParentRef.current;
+          chainParentRef.current = new Map();
           dragStartPosRef.current = null;
 
           if (pendingTarget) {
@@ -318,9 +325,19 @@ function FlowGraphInner({
               if (!change.id.startsWith('exit:')) {
                 onNodePositionChange(change.id, snappedX, snappedY);
               }
-              // Save positions for chain members that moved with this node.
-              for (const [memberId, offset] of chainOffsets) {
-                onNodePositionChange(memberId, snappedX + offset.dx, snappedY + offset.dy);
+              // Reposition chain members flush below their parents using exact heights,
+              // then save. Walk in insertion order (parent before child).
+              if (chainParents.size > 0) {
+                const byId = new Map(next.map((n) => [n.id, n]));
+                byId.set(change.id, { ...byId.get(change.id)!, position: { x: snappedX, y: snappedY } });
+                for (const [memberId, { parentId }] of chainParents) {
+                  const parent = byId.get(parentId);
+                  if (!parent) continue;
+                  const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
+                  const memberPos = { x: parent.position.x, y: parent.position.y + ph };
+                  byId.set(memberId, { ...byId.get(memberId)!, position: memberPos });
+                  onNodePositionChange(memberId, memberPos.x, memberPos.y);
+                }
               }
               continue;
             }
@@ -329,11 +346,16 @@ function FlowGraphInner({
           if (!change.id.startsWith('exit:')) {
             onNodePositionChange(change.id, change.position.x, change.position.y);
           }
-          // Save positions for chain members that moved with this node.
-          for (const memberId of chainOffsets.keys()) {
-            const memberNode = next.find((n) => n.id === memberId);
-            if (memberNode) {
-              onNodePositionChange(memberId, memberNode.position.x, memberNode.position.y);
+          // Save positions for chain members — read from next (already recomputed flush).
+          if (chainParents.size > 0) {
+            const byId = new Map(next.map((n) => [n.id, n]));
+            for (const [memberId, { parentId }] of chainParents) {
+              const parent = byId.get(parentId);
+              if (!parent) continue;
+              const ph = parent.measured?.height ?? FALLBACK_NODE_HEIGHT;
+              const memberPos = { x: parent.position.x, y: parent.position.y + ph };
+              byId.set(memberId, { ...byId.get(memberId)!, position: memberPos });
+              onNodePositionChange(memberId, memberPos.x, memberPos.y);
             }
           }
         }
