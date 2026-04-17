@@ -502,8 +502,12 @@ function FlowGraphInner({
 
   const decoratedEdges = useMemo(
     () => edges.map((e, idx) => {
-      // Selected always wins — show even if flush-stacked.
-      if (e.id === selectedEdgeId) return { ...e, selected: true };
+      // Selected always wins — show even if flush-stacked, override marker color to selection blue.
+      if (e.id === selectedEdgeId) return {
+        ...e,
+        selected: true,
+        markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--selection)', width: 20, height: 20 },
+      };
       // Hide edge when its endpoints are flush-stacked (the shared border IS the visual connector).
       if (stackFlags.flushPairs.has(`${e.source}|${e.target}`)) {
         return { ...e, hidden: true };
