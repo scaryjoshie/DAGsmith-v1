@@ -1,0 +1,19 @@
+/*
+ * Vendor overrides: targeted fixes for pre-built libraries whose markup
+ * Tailwind's preflight inadvertently breaks.
+ *
+ * Tailwind v4 preflight sets `svg { display: block }` globally to prevent
+ * descender/alignment issues. That breaks libraries (Dockview, xyflow,
+ * codemirror) that use inline SVG icons next to text — the icon wraps
+ * onto its own line instead of sitting beside the label.
+ *
+ * Rule: add entries here only for third-party DOM you do NOT own. Our
+ * own components should live with preflight's defaults.
+ */
+
+/* Dockview tab: icon + label sit side-by-side */
+.dv-default-tab-content svg,
+.dv-default-tab-action svg {
+  display: inline-block;
+  vertical-align: middle;
+}
