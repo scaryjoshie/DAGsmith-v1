@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import styles from './Toast.module.css';
 
 interface ToastProps {
   message: string;
@@ -14,9 +13,16 @@ export function Toast({ message, onDismiss, duration = 5000 }: ToastProps) {
   }, [message, onDismiss, duration]);
 
   return (
-    <div className={styles.toast}>
-      <span className={styles.msg}>{message}</span>
-      <button type="button" className={styles.close} onClick={onDismiss} aria-label="Dismiss">×</button>
+    <div className="fixed top-3 left-1/2 z-[300] flex -translate-x-1/2 items-center gap-2.5 overflow-hidden rounded-xs border border-[#e05252] bg-surface-1 px-3 py-[7px] font-mono text-sm whitespace-nowrap text-ellipsis text-[#e05252] shadow-[0_4px_16px_rgba(0,0,0,0.5)] max-w-[520px]">
+      <span className="flex-1 overflow-hidden text-ellipsis">{message}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-sm leading-none text-ink-2 hover:text-ink-0"
+      >
+        ×
+      </button>
     </div>
   );
 }
