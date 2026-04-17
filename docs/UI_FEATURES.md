@@ -1,5 +1,8 @@
 # DAGsmith UI features — working spec
 
+> **Historical.** Written mid-session before the redesign direction was clear.
+> Preserved for reasoning/context. Current direction: see EDITOR_MERGE.md + NODE_TAXONOMY.md.
+
 This doc captures the features we want to implement in the UI, ordered by priority. It's a **delta** on top of `docs/SPEC.md`: that doc defines milestones M1–M8; this one tracks work that either extends M5+ or was added during prototyping.
 
 The section order is intended to be the implementation order unless otherwise noted.

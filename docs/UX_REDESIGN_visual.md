@@ -1,5 +1,8 @@
 # UX Redesign Proposal — Visual & Interaction Angle
 
+> **Historical.** Brainstorm proposals that informed Tier 1 (shipped).
+> Preserved for the reasoning they capture. Current direction: see EDITOR_MERGE.md + CHANGES_2026-04.md.
+
 *Written from the impl-polish perspective. Meant to pair with impl-structure's abstraction-angle draft.*
 
 ---

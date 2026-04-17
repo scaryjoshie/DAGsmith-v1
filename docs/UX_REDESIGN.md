@@ -1,5 +1,8 @@
 # UX Redesign Proposal — impl-structure perspective
 
+> **Historical.** Brainstorm proposals that informed Tier 1 (shipped).
+> Preserved for the reasoning they capture. Current direction: see EDITOR_MERGE.md + CHANGES_2026-04.md.
+
 ## 1. What's Broken Today
 
 **Inspector placement.** The bottom bar forces the user to read a narrow horizontal strip while their eyes are on the graph above. Fields are cramped, exits scroll off-screen. The shape fights how people actually read: top-to-bottom, not left-to-right.

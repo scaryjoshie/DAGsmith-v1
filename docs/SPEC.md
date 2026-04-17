@@ -359,13 +359,36 @@ Each milestone is a set of commits on this branch. No commit is created without 
 
 **M4 — Server split + new endpoints.** Split into `server/` package. Types palette, flow tree, diagnostics (per-flow + per-workspace), group CRUD. Server endpoint tests.
 
-**M5 — UI shell.** Left sidebar (workspace picker, flow tree, types palette placeholder, diagnostics placeholder, Run + Add Node). Top tab bar with tab-split support. Flow canvas and source tabs. Inline popover on selection. Floating run panel. No switcher/fan-out/types-wiring yet — this milestone is chrome and nav only.
+**M5 — UI shell.** ✅ **Complete.** Exceeded original scope: delivered full Dockview-based multi-pane canvas, Inspector with editing affordances (A4–A9: rename, ref, input, exits add/remove), snap-stacking feature, diagnostic badge, run preflight modal, toast, severity borders. Left sidebar with workspace/flows/types/diagnostics sections. See §9.5 for full account.
 
-**M6 — Switcher + fan-out + diagnostic rendering.** Switcher strip, fan-out edge visuals + warning pill, red/amber node rendering, root-cause grouped diagnostics section in left sidebar, per-node diagnostics in popover, Run-button preflight modal.
+**M6 — Switcher + fan-out + diagnostic rendering.** ✅ **Complete.** Switcher strip with flex-width exit pills, fan-out edge count badge (revert from drawing all edges), red/amber node severity borders, per-node diagnostic badge in Inspector, run-button preflight modal, type_mismatch backend emitter + red edge rendering.
 
-**M7 — Drag-and-drop types + subflow navigation.** Types palette section in left sidebar, drag targets (node, exit port, edge, popover exits list), subflow-node "Enter subflow" opens new tab / split, flow-tree subflow highlighting.
+**M7 — Drag-and-drop types + subflow navigation.** Open.
 
-**M8 — Group folding + Playwright baseline.** Group UI (cut first if time-constrained). All e2e specs passing. Fix rough edges surfaced during M5-M7.
+**M8 — Group folding + Playwright baseline.** Open.
+
+## 9.5 Redesign milestone (2026-04)
+
+Work delivered on `feat/subflows-chains-ui` beyond the original M5–M6 scope. Full commit log and design rationale in `docs/CHANGES_2026-04.md`.
+
+**Dockview migration.** The hand-rolled `PaneTree` / `TabsProvider` / `@dnd-kit` split system was replaced with [dockview](https://dockview.dev). Layout persists per workspace in `localStorage`. Split-pane registry stomping (two panes showing the same flow stomping each other's refetch callbacks) was fixed by keying registries on `panelApi.id` instead of `flowId`.
+
+**Inspector → right sidebar.** Inspector moved from a bottom bar to a conditional right panel in the Shell's 3-column grid. Shown only when a node is selected. Fields: name, path, ref, input type, exits (add/remove/rename), diagnostics badge, run preflight trigger.
+
+**Editing affordances (A4–A9).** Inline editing in the Inspector for: rename (with edge + entry_node cascade), ref, input type, exit add/remove/rename. All fire PATCH /nodes; the backend's rename cascade was implemented in the same pass.
+
+**Visual polish.** Node position locking after initial layout (no more floating after BFS), clickable/deletable edges with hover handles, fan-out edge count badge (reverted drawing all fan-out edges separately), severity borders (red left border for errors, amber for warnings), real floating Toast replacing inline error banners.
+
+**Snap-stacking.** Nodes can be dragged flush together; shared border renders with zero gap. Chain drag (moving the top of a snapped chain moves all followers) and drift fix also shipped. Not in the original spec — emerged from canvas usability feedback.
+
+**type_mismatch diagnostic.** `_validate_flow_structure` emits `code="type_mismatch" severity="warning"` with `edge_index` when a source exit's TypeRef differs from the target node's input TypeRef (both non-`typing.Any`). Frontend renders matching edges red.
+
+**Forward design docs.** The direction for M7+ is captured in:
+- `docs/EDITOR_MERGE.md` — preview-tab pattern, Inspector-into-editor merge, emit/return semantics
+- `docs/NODE_TAXONOMY.md` — node kinds, attachments, insertion points, layout persistence
+- `docs/ANNOTATIONS.md` — sticky notes on the canvas
+- `docs/SIDEBAR.md` — activity bar proposal
+- `docs/CHANGES_2026-04.md` — full session log with user reasoning
 
 ## 10. Migration
 
@@ -396,6 +419,20 @@ Out of scope for this branch but worth capturing so we don't redesign them away:
 - **Types registry.** `type_ref` comparison today is string-based with a class-resolution fallback (§11). A real registry lets rename refactors propagate.
 
 Each of these has at least one hook already in the spec (tracer, `Diagnostic`, tab system, left-sidebar sections), so adding them later does not require re-architecture.
+
+### Decisions emerging from the 2026-04 session
+
+**End nodes removed.** Explicit terminal/end nodes were removed in favor of the **Infer** model: unconnected exit ports become public exits automatically. No `public_exits` declaration needed in the common case. Simpler authoring; the graph speaks for itself.
+
+**Start node (planned).** An explicit virtual entry node (▶) for flows that need a specific input shape injected before the first Python node. Not yet implemented.
+
+**Emits vs returns rule.** Single-exit nodes use plain `return value` (return annotation = output type). Multi-exit nodes use `@exits(name=Type, ...)` decorator + `emit("name", value)` — no plain `return`. Dichotomy matches the single-handle vs. switcher-strip visual. Open questions (where `emit` is imported from, async support) in `docs/EDITOR_MERGE.md §6`.
+
+**Action as `kind: "action"`.** Action nodes perform side effects (logging, webhooks) but emit no typed exit value and don't count as leaf nodes for public-exit inference. Regular node machinery; just a flag on `kind`. See `docs/NODE_TAXONOMY.md`.
+
+**Insertion points — two concepts.** (A) Chained action node: regular action node connected via normal edge, runs after the upstream node, renders as a side arrow. Ships with action kind. (B) Code insertion point: mid-function hook with exec state, requires AST instrumentation — deferred to the Action system (Phase 3 per `DESIGN.md`).
+
+**Attachments model.** Storage (persist `{exit, payload, timestamp}` + replay) and Feeder (dev-time payload injection for "Run from here") are attachments on nodes — pill badges — not separate node kinds. Invocation Endpoint (HTTP/cron/webhook) is also an attachment, deferred pending a service layer. Full taxonomy in `docs/NODE_TAXONOMY.md`.
 
 ## 13. Ready-to-start checklist
 
