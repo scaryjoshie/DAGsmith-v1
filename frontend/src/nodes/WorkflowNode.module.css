@@ -9,10 +9,17 @@
   letter-spacing: -0.01em;
   color: var(--fg-0);
   position: relative;
+  transition: border-color 0.1s ease;
 }
 
 .process:hover {
-  border-color: var(--fg-3);
+  border-color: var(--fg-2);
+  background: var(--bg-2);
+}
+
+:global(.react-flow__node.selected) .process {
+  border-color: var(--selection);
+  box-shadow: 0 0 0 2px var(--selection);
 }
 
 .body {
@@ -25,7 +32,7 @@
 
 .terminal {
   background: var(--bg-0);
-  border: 1px solid var(--border-2);
+  border: 1px dashed var(--border-1);
   border-radius: var(--radius-1);
   padding: 7px 18px;
   min-width: 84px;
@@ -35,9 +42,21 @@
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 400;
-  color: var(--fg-1);
+  color: var(--fg-2);
   letter-spacing: 0.01em;
   gap: 8px;
+  transition: border-color 0.1s ease;
+}
+
+.terminal:hover {
+  border-color: var(--border-2);
+  color: var(--fg-1);
+}
+
+:global(.react-flow__node.selected) .terminal {
+  border-color: var(--selection);
+  border-style: solid;
+  box-shadow: 0 0 0 2px var(--selection);
 }
 
 .iconSlot {

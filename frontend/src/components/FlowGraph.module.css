@@ -42,3 +42,8 @@
   min-height: 0;
   position: relative;
 }
+
+/* suppress React Flow's default selection outline — we use box-shadow on the inner node div */
+:global(.react-flow__node.selected) {
+  outline: none !important;
+}
