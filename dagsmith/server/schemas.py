@@ -154,6 +154,8 @@ class UpdateNodeRequest(BaseModel):
     new_name: str | None = None
     ref: str | None = None
     input: str | None = None
+    exits: dict[str, str] | None = None
+    rename_exits: dict[str, str] | None = None
 
 
 class DiagnosticsResponse(BaseModel):

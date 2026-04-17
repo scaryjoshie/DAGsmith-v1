@@ -230,6 +230,80 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
             node_entry["input"] = new_input
             dirty = True
 
+        # Apply exit renames.
+        if request.rename_exits:
+            current_exits = node_entry.get("exits")
+            if not isinstance(current_exits, dict):
+                raise HTTPException(status_code=500, detail=f"exits for {node_name!r} is malformed")
+            for old_exit, new_exit in request.rename_exits.items():
+                new_exit = new_exit.strip()
+                if not new_exit:
+                    raise HTTPException(status_code=400, detail=f"exit name must not be empty")
+                if not _IDENTIFIER_RE.match(new_exit):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"invalid exit name {new_exit!r}: must be a valid Python identifier",
+                    )
+                if old_exit not in current_exits:
+                    raise HTTPException(status_code=400, detail=f"exit {old_exit!r} not found on node {node_name!r}")
+                if new_exit != old_exit:
+                    if new_exit in current_exits:
+                        raise HTTPException(status_code=400, detail=f"exit {new_exit!r} already exists on node {node_name!r}")
+                    current_exits[new_exit] = current_exits.pop(old_exit)
+                    # Cascade rename in edges.
+                    edges = data.get("edges")
+                    if isinstance(edges, list):
+                        for edge in edges:
+                            if isinstance(edge, dict) and edge.get("from_node") == node_name and edge.get("from_exit") == old_exit:
+                                edge["from_exit"] = new_exit
+                    # Cascade rename in layout.exits.
+                    layout = data.get("layout")
+                    if isinstance(layout, dict):
+                        layout_exits = layout.get("exits")
+                        if isinstance(layout_exits, dict) and node_name in layout_exits:
+                            order = layout_exits[node_name]
+                            if isinstance(order, list):
+                                layout_exits[node_name] = [new_exit if e == old_exit else e for e in order]
+                    dirty = True
+
+        # Apply exits dict (add/remove with edge cascade).
+        if request.exits is not None:
+            current_exits = node_entry.get("exits")
+            if not isinstance(current_exits, dict):
+                current_exits = {}
+            if not request.exits:
+                raise HTTPException(status_code=400, detail="a node must have at least one exit")
+            # Validate all new exit names.
+            for exit_name in request.exits:
+                if not _IDENTIFIER_RE.match(exit_name):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"invalid exit name {exit_name!r}: must be a valid Python identifier",
+                    )
+            # Find removed exits and cascade-delete their edges.
+            removed_exits = set(current_exits.keys()) - set(request.exits.keys())
+            if removed_exits:
+                edges = data.get("edges")
+                if isinstance(edges, list):
+                    data["edges"] = [
+                        edge for edge in edges
+                        if not (
+                            isinstance(edge, dict)
+                            and edge.get("from_node") == node_name
+                            and edge.get("from_exit") in removed_exits
+                        )
+                    ]
+                # Remove from layout.exits order too.
+                layout = data.get("layout")
+                if isinstance(layout, dict):
+                    layout_exits = layout.get("exits")
+                    if isinstance(layout_exits, dict) and node_name in layout_exits:
+                        order = layout_exits[node_name]
+                        if isinstance(order, list):
+                            layout_exits[node_name] = [e for e in order if e not in removed_exits]
+            node_entry["exits"] = dict(request.exits)
+            dirty = True
+
         # Apply rename — must come last so ref/input patches use the original key.
         effective_name = node_name
         if request.new_name is not None:

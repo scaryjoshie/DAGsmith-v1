@@ -113,6 +113,8 @@ export interface UpdateNodePayload {
   new_name?: string;
   ref?: string;
   input?: string;
+  exits?: Record<string, string>;
+  rename_exits?: Record<string, string>;
 }
 
 export function updateNode(
