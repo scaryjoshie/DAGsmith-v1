@@ -1,7 +1,14 @@
 @import "tailwindcss";
 
-/* Token bridge: :root vars are source of truth; @theme re-exposes them as Tailwind utilities. */
+/* Token bridge: :root vars are source of truth; @theme re-exposes them as Tailwind utilities.
+ * --text-*--line-height: normal prevents Tailwind from bundling a line-height with each text-* utility,
+ *   preserving pre-Tailwind "browser-normal" line-heights across the existing UI. */
 @theme inline {
+  /* Lock spacing to absolute pixels (not rem). html font-size is 13px here,
+   * so the default 0.25rem = 3.25px would make p-3 render as 9.75px instead
+   * of 12px. 4px absolute keeps the familiar 4/8/12/16 step sizing. */
+  --spacing: 4px;
+
   --color-surface-0: var(--bg-0);
   --color-surface-1: var(--bg-1);
   --color-surface-2: var(--bg-2);
@@ -33,87 +40,91 @@
   --font-sans: var(--font-sans);
 
   --text-xs: var(--text-xs);
+  --text-xs--line-height: normal;
   --text-sm: var(--text-sm);
+  --text-sm--line-height: normal;
   --text-md: var(--text-md);
+  --text-md--line-height: normal;
   --text-lg: var(--text-lg);
+  --text-lg--line-height: normal;
 }
 
-:root {
-  --bg-0: #000;
-  --bg-1: #0a0a0a;
-  --bg-2: #111;
-  --bg-3: #171717;
-  --bg-hover: #1a1a1a;
+/* Base layer: raw CSS variables, global element resets, focus styles.
+ * Everything global lives under @layer base so Tailwind utilities (which live
+ * in @layer utilities, a later cascade layer) correctly win at the use site. */
+@layer base {
+  :root {
+    --bg-0: #000;
+    --bg-1: #0a0a0a;
+    --bg-2: #111;
+    --bg-3: #171717;
+    --bg-hover: #1a1a1a;
 
-  --border-0: #2a2a2a;
-  --border-1: #333;
-  --border-2: #444;
+    --border-0: #2a2a2a;
+    --border-1: #333;
+    --border-2: #444;
 
-  --fg-0: #ededed;
-  --fg-1: #a1a1a1;
-  --fg-2: #737373;
-  --fg-3: #525252;
+    --fg-0: #ededed;
+    --fg-1: #a1a1a1;
+    --fg-2: #737373;
+    --fg-3: #525252;
 
-  --accent: #fafafa;
-  --blue: #0070f3;
-  --red: #e5484d;
-  --amber: #f5a623;
-  --selection: #3b82f6;
-  --severity-blocking: #ef4444;
-  --severity-warning: #f59e0b;
+    --accent: #fafafa;
+    --blue: #0070f3;
+    --red: #e5484d;
+    --amber: #f5a623;
+    --selection: #3b82f6;
+    --severity-blocking: #ef4444;
+    --severity-warning: #f59e0b;
 
-  --radius-0: 0;
-  --radius-1: 2px;
-  --radius-2: 4px;
+    --radius-0: 0;
+    --radius-1: 2px;
+    --radius-2: 4px;
 
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
 
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-lg: 15px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-md: 13px;
+    --text-lg: 15px;
 
-  color-scheme: dark;
-}
+    color-scheme: dark;
+  }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    font-family: var(--font-sans);
+    background: var(--bg-0);
+    color: var(--fg-0);
+    font-size: var(--text-md);
+    line-height: normal;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  font-family: var(--font-sans);
-  background: var(--bg-0);
-  color: var(--fg-0);
-  font-size: var(--text-md);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  :focus {
+    outline: none;
+  }
 
-:focus {
-  outline: none;
-}
+  :focus-visible {
+    outline: 1px solid var(--fg-0);
+    outline-offset: 1px;
+  }
 
-:focus-visible {
-  outline: 1px solid var(--fg-0);
-  outline-offset: 1px;
-}
+  button {
+    font-family: inherit;
+    font-size: inherit;
+  }
 
-button {
-  font-family: inherit;
-  font-size: inherit;
-}
+  input, textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+  }
 
-input, textarea, select {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-::selection {
-  background: var(--border-2);
-  color: var(--fg-0);
+  ::selection {
+    background: var(--border-2);
+    color: var(--fg-0);
+  }
 }
