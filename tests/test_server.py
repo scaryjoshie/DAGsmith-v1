@@ -633,3 +633,86 @@ class TestMutationResponseDiagnostics:
         # server_pkg has a broken-ref node; that diagnostic survives layout writes
         codes = [d["code"] for d in body["diagnostics"]]
         assert "unresolved_ref" in codes
+
+
+# --- PATCH /nodes coverage ------------------------------------------------
+
+
+class TestUpdateNode:
+    """PATCH /api/workspaces/{w}/flows/{fid}/nodes/{node} — 5 editing paths."""
+
+    def test_rename_node_cascades_to_edges_and_entry(
+        self, client: TestClient, server_pkg: str
+    ) -> None:
+        resp = client.patch(
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet",
+            json={"new_name": "welcome"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "welcome" in body["nodes"]
+        assert "greet" not in body["nodes"]
+        assert body["entry_node"] == "welcome"
+        # original edge from_node must be updated
+        edge = next(
+            (e for e in body["edges"] if e.get("from_node") == "welcome"), None
+        )
+        assert edge is not None, "edge from_node should cascade to 'welcome'"
+
+    def test_update_ref_changes_ref_field(
+        self, client: TestClient, server_pkg: str
+    ) -> None:
+        resp = client.patch(
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet",
+            json={"ref": ".greet:process"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["nodes"]["greet"]["ref"] == ".greet:process"
+
+    def test_update_input_type_changes_input_field(
+        self, client: TestClient, server_pkg: str
+    ) -> None:
+        resp = client.patch(
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet",
+            json={"input": "builtins.str"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["nodes"]["greet"]["input_type"] == "builtins.str"
+
+    def test_rename_exit_cascades_to_edges(
+        self, client: TestClient, server_pkg: str
+    ) -> None:
+        # greet:out → flow_exit "out" exists. Rename the exit "out" → "result".
+        resp = client.patch(
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet",
+            json={"rename_exits": {"out": "result"}},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "result" in body["nodes"]["greet"]["exits"]
+        assert "out" not in body["nodes"]["greet"]["exits"]
+        # the edge must reflect the new exit name
+        edge = next(
+            e for e in body["edges"] if e.get("from_node") == "greet"
+        )
+        assert edge["from_exit"] == "result"
+
+    def test_reconcile_exits_removes_dangling_edges(
+        self, client: TestClient, server_pkg: str
+    ) -> None:
+        # greet currently has exit "out" with an edge to flow_exit.
+        # Replacing exits with only {"done": "typing.Any"} should delete the
+        # dangling greet:out edge.
+        resp = client.patch(
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet",
+            json={"exits": {"done": "typing.Any"}},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "done" in body["nodes"]["greet"]["exits"]
+        assert "out" not in body["nodes"]["greet"]["exits"]
+        dangling = [
+            e for e in body["edges"]
+            if e.get("from_node") == "greet" and e.get("from_exit") == "out"
+        ]
+        assert dangling == [], "edge referencing removed exit should be deleted"
