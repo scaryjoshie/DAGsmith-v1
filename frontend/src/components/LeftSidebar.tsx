@@ -1,15 +1,19 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import type { WorkspaceView } from '../types';
+import type { FlowView, WorkspaceView } from '../types';
+import { DiagnosticsSection } from './DiagnosticsSection';
 import styles from './LeftSidebar.module.css';
 
 interface LeftSidebarProps {
   workspaceName: string;
   workspace: WorkspaceView | null;
   allWorkspaces: WorkspaceView[];
+  activeFlowView: FlowView | null;
   onWorkspaceChange: (name: string) => void;
   onOpenFlow: (flowId: string) => void;
   onRunClick: () => void;
   onAddNodeClick: () => void;
+  onPanToNode: (nodeId: string) => void;
+  onNodeSelect: (node: { nodeId: string; flowId: string; workspaceName: string }) => void;
   canRun: boolean;
   canAddNode: boolean;
 }
@@ -18,10 +22,13 @@ export function LeftSidebar({
   workspaceName,
   workspace,
   allWorkspaces,
+  activeFlowView,
   onWorkspaceChange,
   onOpenFlow,
   onRunClick,
   onAddNodeClick,
+  onPanToNode,
+  onNodeSelect,
   canRun,
   canAddNode,
 }: LeftSidebarProps) {
@@ -66,7 +73,18 @@ export function LeftSidebar({
         </Section>
 
         <Section title="Diagnostics">
-          <div className={styles.placeholder}>Diagnostics coming in M6</div>
+          {activeFlowView ? (
+            <DiagnosticsSection
+              diagnostics={activeFlowView.diagnostics}
+              onSelectNode={(nodeId) => {
+                if (!activeFlowView) return;
+                onNodeSelect({ nodeId, flowId: activeFlowView.id, workspaceName });
+                onPanToNode(nodeId);
+              }}
+            />
+          ) : (
+            <div className={styles.muted}>open a flow to see diagnostics</div>
+          )}
         </Section>
       </div>
 

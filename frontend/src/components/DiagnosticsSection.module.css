@@ -1,0 +1,126 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupRoot {
+  display: flex;
+  align-items: stretch;
+}
+
+.diagRow {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 6px 5px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--fg-1);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-1);
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.diagRow:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+
+.diagRowIndent {
+  padding-left: 18px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.dotError {
+  background: #e05252;
+}
+
+.dotWarn {
+  background: #d97706;
+}
+
+.dotInfo {
+  background: var(--fg-3);
+}
+
+.diagMsg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.diagNode {
+  flex-shrink: 0;
+  color: var(--fg-3);
+  font-size: 9px;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+.expandBtn {
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-1);
+}
+
+.expandBtn:hover {
+  color: var(--fg-1);
+  background: var(--bg-2);
+}
+
+.chevron,
+.chevronOpen {
+  display: inline-block;
+  transition: transform 0.12s ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.derived {
+  border-left: 1px solid var(--border-0);
+  margin-left: 10px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+}
+
+.emptyCheck {
+  color: #4caf50;
+  font-size: 11px;
+}

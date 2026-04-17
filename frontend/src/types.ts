@@ -41,12 +41,14 @@ export interface FlowLayout {
 }
 
 export interface DiagnosticView {
+  id: string;
   severity: 'error' | 'warning' | 'info';
   code: string;
   message: string;
   flow_id: string;
   node_id: string | null;
   edge_index: number | null;
+  derived_from: string | null;
 }
 
 export interface FlowView {

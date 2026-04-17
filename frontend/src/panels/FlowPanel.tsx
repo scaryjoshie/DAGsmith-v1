@@ -11,7 +11,7 @@ import {
 } from '../api';
 import type { FlowView, LayoutPositions } from '../types';
 import { useSelection } from '../SelectionContext';
-import { registerFlowRefetch } from '../App';
+import { registerFlowRefetch, registerPanToNode } from '../App';
 import styles from './FlowPanel.module.css';
 
 export interface FlowPanelParams {
@@ -62,6 +62,10 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
   useEffect(() => {
     return registerFlowRefetch(flowId, () => { void refetchFlow(); });
   }, [flowId, refetchFlow]);
+
+  const handleFlowGraphReady = useCallback((panToNode: (nodeId: string) => void) => {
+    registerPanToNode(flowId, panToNode);
+  }, [flowId]);
 
   const handleConnect = useCallback(async (connection: Connection) => {
     if (!flow || !connection.source || !connection.target) return;
@@ -196,6 +200,7 @@ export function FlowPanel({ params }: IDockviewPanelProps<FlowPanelParams>) {
         onNodePositionChange={handleNodePositionChange}
         onReconnectEdge={handleReconnectEdge}
         onExitsReorder={handleExitsReorder}
+        onReady={handleFlowGraphReady}
       />
     </div>
   );
