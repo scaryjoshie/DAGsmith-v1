@@ -24,13 +24,11 @@
   --color-ink-2: var(--fg-2);
   --color-ink-3: var(--fg-3);
 
-  --color-accent: var(--accent);
   --color-blue: var(--blue);
   --color-red: var(--red);
   --color-amber: var(--amber);
   --color-amber-muted: var(--amber-muted);
   --color-green: var(--green);
-  --color-selection: var(--selection);
 
   --radius-none: var(--radius-0);
   --radius-xs: var(--radius-1);
@@ -69,13 +67,11 @@
     --fg-2: #737373;
     --fg-3: #525252;
 
-    --accent: #fafafa;
-    --blue: #0070f3;
+    --blue: #3b82f6;
     --red: #e5484d;
     --amber: #f59e0b;
     --amber-muted: #d97706;
     --green: #4caf50;
-    --selection: #3b82f6;
 
     --radius-0: 0;
     --radius-1: 2px;

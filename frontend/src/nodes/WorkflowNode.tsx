@@ -73,7 +73,7 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
       : '';
 
   const snapTargetClass = data.snapTarget
-    ? 'border-b-2 !border-b-[var(--selection)] shadow-[0_2px_0_0_var(--selection)]'
+    ? 'border-b-2 !border-b-[var(--blue)] shadow-[0_2px_0_0_var(--blue)]'
     : '';
 
   const snappedAboveClass = data.snappedAbove ? 'rounded-b-none' : '';
@@ -147,7 +147,7 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
               'relative min-w-[72px] flex-[1_0_auto] whitespace-nowrap border-r border-line-2 px-3.5 py-[7px] text-center font-mono text-xs tracking-[-0.01em] text-ink-1 transition-[background,color] duration-100 ease-[ease] hover:text-ink-0 last:border-r-0',
               cellBaseBg,
               isDragging ? 'opacity-40' : '',
-              isDropTarget ? '!bg-surface-3 border-l-2 border-l-[var(--selection)]' : '',
+              isDropTarget ? '!bg-surface-3 border-l-2 border-l-[var(--blue)]' : '',
             ].filter(Boolean).join(' ');
             return (
               <div

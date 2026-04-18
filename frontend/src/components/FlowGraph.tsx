@@ -26,7 +26,7 @@ const EDGE_DELETE_BTN_CLASS =
   'pointer-events-auto flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] border border-line-2 bg-surface-1 font-mono text-[11px] leading-none text-ink-1 transition-[background,border-color,color] duration-100 ease-[ease] hover:border-red hover:bg-red hover:text-white';
 
 const EDGE_ENDPOINT_HANDLE_CLASS =
-  'pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 cursor-crosshair rounded-full border-[1.5px] border-surface-0 bg-selection';
+  'pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 cursor-crosshair rounded-full border-[1.5px] border-surface-0 bg-blue';
 
 const nodeTypes = { workflow: WorkflowNode };
 
@@ -54,7 +54,7 @@ function SelectableEdge({
 
   const isSelected = !!selected;
   const edgeStyle = isSelected
-    ? { ...style, stroke: 'var(--selection)', strokeWidth: 2.5 }
+    ? { ...style, stroke: 'var(--blue)', strokeWidth: 2.5 }
     : style;
 
   return (
@@ -524,7 +524,7 @@ function FlowGraphInner({
       if (e.id === selectedEdgeId) return {
         ...e,
         selected: true,
-        markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--selection)', width: 20, height: 20 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--blue)', width: 20, height: 20 },
       };
       // Hide edge when its endpoints are flush-stacked (the shared border IS the visual connector).
       if (stackFlags.flushPairs.has(`${e.source}|${e.target}`)) {

@@ -61,8 +61,8 @@
    * selection-blue border on severity-flagged selected nodes. */
   .flow-graph-canvas .react-flow__node.selected .wf-process,
   .flow-graph-canvas .react-flow__node.selected .wf-terminal {
-    border-color: var(--selection) !important;
-    box-shadow: 0 0 0 2px var(--selection);
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 0 2px var(--blue);
   }
 
   .flow-graph-canvas .react-flow__node.selected .wf-terminal {
