@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { addNode } from '../api';
 import type { AddNodePayload, FlowView } from '../types';
-import styles from './AddNodeDialog.module.css';
 
 interface AddNodeDialogProps {
   workspace: string;
@@ -60,22 +59,27 @@ export function AddNodeDialog({
 
   return (
     <div
-      className={styles.backdrop}
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-[rgba(0,0,0,0.35)] pt-[25vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <form className={styles.mini} onSubmit={handleSubmit}>
+      <form
+        className="flex w-[340px] flex-col gap-1.5 rounded-sm border border-line-2 bg-surface-2 p-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+        onSubmit={handleSubmit}
+      >
         <input
           ref={inputRef}
-          className={styles.miniInput}
+          className="rounded-xs border border-line-1 bg-surface-1 px-2.5 py-2 font-mono text-md text-ink-0 outline-none focus-visible:border-blue"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="node name, press Enter"
           spellCheck={false}
           disabled={submitting}
         />
-        {error && <div className={styles.miniError}>{error}</div>}
+        {error && (
+          <div className="px-1 py-0 font-mono text-xs text-red">{error}</div>
+        )}
       </form>
     </div>
   );
