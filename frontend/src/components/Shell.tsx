@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import styles from './Shell.module.css';
 
 interface ShellProps {
   sidebarBody?: ReactNode;
@@ -14,6 +13,8 @@ const SIDEBAR_WIDTH_KEY = 'dagsmith.shell.sidebarWidth';
 const MIN_INSPECTOR_WIDTH = 240;
 const MAX_INSPECTOR_WIDTH = 480;
 const INSPECTOR_WIDTH_KEY = 'dagsmith.shell.inspectorWidth';
+
+const RESIZER_BASE = 'absolute top-0 z-[1] h-full w-1 cursor-ew-resize hover:bg-line-2';
 
 function readStoredWidth(key: string, defaultVal: number): number {
   const raw = window.localStorage.getItem(key);
@@ -95,29 +96,33 @@ export function Shell({ sidebarBody, canvas, rightPanel }: ShellProps) {
   };
 
   return (
-    <div ref={rootRef} className={styles.root} style={cssVars}>
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarBody}>
+    <div
+      ref={rootRef}
+      className="grid h-screen w-screen grid-cols-[var(--sidebar-width,232px)_1fr_var(--inspector-width,0px)] overflow-hidden bg-surface-0 text-ink-0"
+      style={cssVars}
+    >
+      <aside className="relative col-start-1 row-start-1 flex min-h-0 flex-col border-r border-line-0 bg-surface-0">
+        <div className="min-h-0 flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-line-1 [&::-webkit-scrollbar-track]:bg-transparent">
           {sidebarBody !== undefined ? sidebarBody : (
-            <div className={styles.sidebarPlaceholder}>sidebar</div>
+            <div className="px-4 py-3.5 text-xs uppercase tracking-[0.06em] text-ink-3">sidebar</div>
           )}
         </div>
         <div
-          className={isResizingSidebar ? `${styles.sidebarResizer} ${styles.resizing}` : styles.sidebarResizer}
+          className={`${RESIZER_BASE} -right-0.5 ${isResizingSidebar ? 'bg-line-2' : ''}`}
           onMouseDown={handleSidebarResizerDown}
           aria-label="Resize sidebar"
           role="separator"
         />
       </aside>
 
-      <main className={styles.workArea}>
-        <div className={styles.canvasArea}>{canvas}</div>
+      <main className="relative col-start-2 row-start-1 flex min-h-0 min-w-0 flex-col bg-surface-0">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-surface-0">{canvas}</div>
       </main>
 
       {rightPanel !== undefined && (
-        <aside className={styles.inspectorPanel}>
+        <aside className="relative col-start-3 row-start-1 flex min-h-0 flex-col overflow-hidden border-l border-line-0 bg-surface-0">
           <div
-            className={isResizingInspector ? `${styles.inspectorResizer} ${styles.resizing}` : styles.inspectorResizer}
+            className={`${RESIZER_BASE} -left-0.5 ${isResizingInspector ? 'bg-line-2' : ''}`}
             onMouseDown={handleInspectorResizerDown}
             aria-label="Resize inspector"
             role="separator"
