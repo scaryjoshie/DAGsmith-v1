@@ -1,6 +1,7 @@
 /*
  * Vendor overrides: targeted fixes for pre-built libraries whose markup
- * Tailwind's preflight inadvertently breaks.
+ * Tailwind's preflight inadvertently breaks, plus dark-theme overrides
+ * for Dockview/CodeMirror/React Flow internals.
  *
  * Tailwind v4 preflight sets `svg { display: block }` globally to prevent
  * descender/alignment issues. That breaks libraries (Dockview, xyflow,
@@ -9,52 +10,55 @@
  *
  * Rule: add entries here only for third-party DOM you do NOT own. Our
  * own components should live with preflight's defaults.
+ *
+ * Everything is wrapped in @layer base so its `!important` declarations
+ * win against Tailwind's `!`-prefixed utilities (which live in
+ * @layer utilities). Per CSS Cascade L5, `!important` from an earlier-
+ * declared layer beats `!important` from a later one. Tailwind v4's
+ * auto layer order is `theme, base, components, utilities`. Most rules
+ * here don't need this priority (they target classes Tailwind never
+ * emits), but consistent layering removes a future foot-gun where a
+ * new utility silently competes.
  */
 
-/* Dockview tab: icon + label sit side-by-side */
-.dv-default-tab-content svg,
-.dv-default-tab-action svg {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-/* SourceTab CodeMirror surface: full-height editor flush with the dark
- * surface-0 background, mono font, and a 1px gutter divider in line-0. */
-.source-tab-editor .cm-editor {
-  height: 100%;
-  font-size: var(--text-sm);
-  background: var(--bg-0);
-}
-
-.source-tab-editor .cm-scroller {
-  font-family: var(--font-mono);
-}
-
-.source-tab-editor .cm-gutters {
-  background: var(--bg-0);
-  border-right: 1px solid var(--border-0);
-  color: var(--fg-3);
-}
-
-/* FlowGraph: suppress React Flow's default selection outline — we render
- * our own focus ring via box-shadow on the inner node div in WorkflowNode. */
-.flow-graph-canvas .react-flow__node.selected {
-  outline: none !important;
-}
-
-/* WorkflowNode: when react-flow marks a node selected, paint a 2px selection
- * ring on our inner divs. The ring beats severity coloring (highest priority
- * border treatment) and switches the dashed terminal border to solid for
- * sharper selection feedback.
- *
- * Wrapped in @layer base so its !important wins over Tailwind's `!`-prefixed
- * severity utilities (which live in @layer utilities). Per CSS Cascade L5,
- * `!important` declarations from an EARLIER-declared layer beat `!important`
- * declarations from a LATER one — Tailwind v4's auto layer order is
- * `theme, base, components, utilities`, so base !important wins. Without
- * this wrapping, `.\!border-severity-blocking` (utilities) would paint over
- * the selection-blue border on severity-flagged selected nodes. */
 @layer base {
+  /* Dockview tab: icon + label sit side-by-side */
+  .dv-default-tab-content svg,
+  .dv-default-tab-action svg {
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  /* SourceTab CodeMirror surface: full-height editor flush with the dark
+   * surface-0 background, mono font, and a 1px gutter divider in line-0. */
+  .source-tab-editor .cm-editor {
+    height: 100%;
+    font-size: var(--text-sm);
+    background: var(--bg-0);
+  }
+
+  .source-tab-editor .cm-scroller {
+    font-family: var(--font-mono);
+  }
+
+  .source-tab-editor .cm-gutters {
+    background: var(--bg-0);
+    border-right: 1px solid var(--border-0);
+    color: var(--fg-3);
+  }
+
+  /* FlowGraph: suppress React Flow's default selection outline — we render
+   * our own focus ring via box-shadow on the inner node div in WorkflowNode. */
+  .flow-graph-canvas .react-flow__node.selected {
+    outline: none !important;
+  }
+
+  /* WorkflowNode: when react-flow marks a node selected, paint a 2px selection
+   * ring on our inner divs. The ring beats severity coloring (highest priority
+   * border treatment) and switches the dashed terminal border to solid for
+   * sharper selection feedback. The base-layer wrapping is load-bearing here:
+   * without it, `.\!border-severity-blocking` (utilities) would paint over the
+   * selection-blue border on severity-flagged selected nodes. */
   .flow-graph-canvas .react-flow__node.selected .wf-process,
   .flow-graph-canvas .react-flow__node.selected .wf-terminal {
     border-color: var(--selection) !important;
@@ -64,143 +68,143 @@
   .flow-graph-canvas .react-flow__node.selected .wf-terminal {
     border-style: solid !important;
   }
-}
 
-/* DockviewCanvas: dagsmith-theme overrides dockview-theme-dark with the
- * Vercel dark token palette. The .dagsmith-theme class is applied on the
- * DockviewCanvas wrapper element; every rule below targets dockview's
- * .dv-* internals scoped under that wrapper. */
+  /* DockviewCanvas: dagsmith-theme overrides dockview-theme-dark with the
+   * Vercel dark token palette. The .dagsmith-theme class is applied on the
+   * DockviewCanvas wrapper element; every rule below targets dockview's
+   * .dv-* internals scoped under that wrapper. */
 
-.dagsmith-theme {
-  /* Timing / transitions (carried over from dockview-theme-dark base) */
-  --dv-transition-duration: 0.2s;
-  --dv-active-sash-transition-duration: 0.1s;
-  --dv-active-sash-transition-delay: 0.5s;
-  --dv-overlay-z-index: 999;
+  .dagsmith-theme {
+    /* Timing / transitions (carried over from dockview-theme-dark base) */
+    --dv-transition-duration: 0.2s;
+    --dv-active-sash-transition-duration: 0.1s;
+    --dv-active-sash-transition-delay: 0.5s;
+    --dv-overlay-z-index: 999;
 
-  /* Neutralize the abyss color palette that dockview injects internally */
-  --dv-color-abyss: var(--bg-0);
-  --dv-color-abyss-dark: var(--bg-0);
-  --dv-color-abyss-light: var(--bg-1);
-  --dv-color-abyss-lighter: var(--bg-2);
-  --dv-color-abyss-accent: var(--fg-0);
-  --dv-color-abyss-primary-text: var(--fg-0);
-  --dv-color-abyss-secondary-text: var(--fg-2);
+    /* Neutralize the abyss color palette that dockview injects internally */
+    --dv-color-abyss: var(--bg-0);
+    --dv-color-abyss-dark: var(--bg-0);
+    --dv-color-abyss-light: var(--bg-1);
+    --dv-color-abyss-lighter: var(--bg-2);
+    --dv-color-abyss-accent: var(--fg-0);
+    --dv-color-abyss-primary-text: var(--fg-0);
+    --dv-color-abyss-secondary-text: var(--fg-2);
 
-  /* Backgrounds */
-  --dv-group-view-background-color: var(--bg-0);
-  --dv-tabs-and-actions-container-background-color: var(--bg-1);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--bg-2);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg-1);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg-1);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg-1);
-  --dv-tab-divider-color: var(--border-0);
+    /* Backgrounds */
+    --dv-group-view-background-color: var(--bg-0);
+    --dv-tabs-and-actions-container-background-color: var(--bg-1);
+    --dv-activegroup-visiblepanel-tab-background-color: var(--bg-2);
+    --dv-activegroup-hiddenpanel-tab-background-color: var(--bg-1);
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg-1);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg-1);
+    --dv-tab-divider-color: var(--border-0);
 
-  /* Text */
-  --dv-activegroup-visiblepanel-tab-color: var(--fg-0);
-  --dv-activegroup-hiddenpanel-tab-color: var(--fg-2);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--fg-3);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--fg-3);
+    /* Text */
+    --dv-activegroup-visiblepanel-tab-color: var(--fg-0);
+    --dv-activegroup-hiddenpanel-tab-color: var(--fg-2);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--fg-3);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--fg-3);
 
-  /* Borders / separators */
-  --dv-separator-border: var(--border-0);
-  --dv-paneview-header-border-color: var(--border-0);
-  --dv-drag-over-border-color: var(--border-2);
-  --dv-drag-over-background-color: rgba(250, 250, 250, 0.04);
+    /* Borders / separators */
+    --dv-separator-border: var(--border-0);
+    --dv-paneview-header-border-color: var(--border-0);
+    --dv-drag-over-border-color: var(--border-2);
+    --dv-drag-over-background-color: rgba(250, 250, 250, 0.04);
 
-  /* Sash (resize handles) */
-  --dv-sash-color: var(--border-0);
-  --dv-active-sash-color: var(--border-2);
+    /* Sash (resize handles) */
+    --dv-sash-color: var(--border-0);
+    --dv-active-sash-color: var(--border-2);
 
-  /* Interaction */
-  --dv-icon-hover-background-color: var(--bg-hover);
-  --dv-paneview-active-outline-color: var(--fg-0);
-  --dv-scrollbar-background-color: var(--border-1);
-  --dv-tabs-container-scrollbar-color: var(--border-1);
+    /* Interaction */
+    --dv-icon-hover-background-color: var(--bg-hover);
+    --dv-paneview-active-outline-color: var(--fg-0);
+    --dv-scrollbar-background-color: var(--border-1);
+    --dv-tabs-container-scrollbar-color: var(--border-1);
 
-  /* Typography */
-  --dv-tab-font-size: 12px;
-  --dv-tabs-and-actions-container-font-size: 12px;
-  --dv-tabs-and-actions-container-height: 30px;
+    /* Typography */
+    --dv-tab-font-size: 12px;
+    --dv-tabs-and-actions-container-font-size: 12px;
+    --dv-tabs-and-actions-container-height: 30px;
 
-  /* Shape */
-  --dv-border-radius: 0px;
-  --dv-tab-margin: 0;
+    /* Shape */
+    --dv-border-radius: 0px;
+    --dv-tab-margin: 0;
 
-  /* Floats / overlays */
-  --dv-floating-box-shadow: 0 0 0 1px var(--border-0);
-}
+    /* Floats / overlays */
+    --dv-floating-box-shadow: 0 0 0 1px var(--border-0);
+  }
 
-/* Tab bar: mono font + bottom border + explicit bg (overrides internal abyss theme) */
-.dagsmith-theme .dv-tabs-and-actions-container {
-  background-color: var(--bg-1) !important;
-  border-bottom: 1px solid var(--border-0);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
+  /* Tab bar: mono font + bottom border + explicit bg (overrides internal abyss theme) */
+  .dagsmith-theme .dv-tabs-and-actions-container {
+    background-color: var(--bg-1) !important;
+    border-bottom: 1px solid var(--border-0);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
 
-/* Tabs: mono font, sharp corners */
-.dagsmith-theme .dv-tab {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  border-radius: 0;
-  padding: 0 10px;
-}
+  /* Tabs: mono font, sharp corners */
+  .dagsmith-theme .dv-tab {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    border-radius: 0;
+    padding: 0 10px;
+  }
 
-/* Active tab: bottom border accent */
-.dagsmith-theme .dv-tab.active-tab {
-  border-bottom: 1px solid var(--fg-0);
-}
+  /* Active tab: bottom border accent */
+  .dagsmith-theme .dv-tab.active-tab {
+    border-bottom: 1px solid var(--fg-0);
+  }
 
-/* Inactive tab hover */
-.dagsmith-theme .dv-tab:not(.active-tab):hover {
-  background-color: var(--bg-2) !important;
-  color: var(--fg-1);
-}
+  /* Inactive tab hover */
+  .dagsmith-theme .dv-tab:not(.active-tab):hover {
+    background-color: var(--bg-2) !important;
+    color: var(--fg-1);
+  }
 
-/* Close button */
-.dagsmith-theme .dv-tab .dv-default-tab-action {
-  color: var(--fg-3);
-  border-radius: 0;
-}
-.dagsmith-theme .dv-tab .dv-default-tab-action:hover {
-  background-color: var(--bg-hover);
-  color: var(--fg-0);
-}
+  /* Close button */
+  .dagsmith-theme .dv-tab .dv-default-tab-action {
+    color: var(--fg-3);
+    border-radius: 0;
+  }
+  .dagsmith-theme .dv-tab .dv-default-tab-action:hover {
+    background-color: var(--bg-hover);
+    color: var(--fg-0);
+  }
 
-/* Root dockview container + all panel/group/tab backgrounds — beat the abyss var chain */
-.dagsmith-theme .dv-dockview,
-.dagsmith-theme .dv-grid-view,
-.dagsmith-theme .dv-branch-node,
-.dagsmith-theme .dv-view-container,
-.dagsmith-theme .dv-view,
-.dagsmith-theme .dv-content-container,
-.dagsmith-theme .dv-groupview {
-  background-color: var(--bg-0) !important;
-}
+  /* Root dockview container + all panel/group/tab backgrounds — beat the abyss var chain */
+  .dagsmith-theme .dv-dockview,
+  .dagsmith-theme .dv-grid-view,
+  .dagsmith-theme .dv-branch-node,
+  .dagsmith-theme .dv-view-container,
+  .dagsmith-theme .dv-view,
+  .dagsmith-theme .dv-content-container,
+  .dagsmith-theme .dv-groupview {
+    background-color: var(--bg-0) !important;
+  }
 
-/* Inactive tab bg — abyss-dark leaks through CSS var chain */
-.dagsmith-theme .dv-tab {
-  background-color: var(--bg-1) !important;
-}
+  /* Inactive tab bg — abyss-dark leaks through CSS var chain */
+  .dagsmith-theme .dv-tab {
+    background-color: var(--bg-1) !important;
+  }
 
-.dagsmith-theme .dv-tab.dv-active-tab {
-  background-color: var(--bg-2) !important;
-}
+  .dagsmith-theme .dv-tab.dv-active-tab {
+    background-color: var(--bg-2) !important;
+  }
 
-/* Drop overlay */
-.dagsmith-theme .dv-drop-target-container {
-  background-color: rgba(250, 250, 250, 0.04);
-  border: 1px solid var(--border-2);
-}
+  /* Drop overlay */
+  .dagsmith-theme .dv-drop-target-container {
+    background-color: rgba(250, 250, 250, 0.04);
+    border: 1px solid var(--border-2);
+  }
 
-/* Scrollbar */
-.dagsmith-theme ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.dagsmith-theme ::-webkit-scrollbar-thumb {
-  background: var(--border-1);
-}
-.dagsmith-theme ::-webkit-scrollbar-track {
-  background: transparent;
+  /* Scrollbar */
+  .dagsmith-theme ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .dagsmith-theme ::-webkit-scrollbar-thumb {
+    background: var(--border-1);
+  }
+  .dagsmith-theme ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
