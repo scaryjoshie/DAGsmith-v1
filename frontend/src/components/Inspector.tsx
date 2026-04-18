@@ -3,7 +3,24 @@ import { updateNode } from '../api';
 import type { FlowView } from '../types';
 import { useSelection, type SelectedNode } from '../SelectionContext';
 import { shortName } from '../lib/typeRefs';
-import styles from './Inspector.module.css';
+
+// Shared input class snippets — kept here as string constants so each
+// CSS-Module rule maps to a single source of truth and so error variants
+// can compose cleanly via template strings.
+
+const ERROR_BORDER = '!border-[#e05252]';
+
+const NAME_INPUT_BASE =
+  'w-full min-w-0 rounded-xs border border-transparent bg-transparent px-[5px] py-0.5 font-mono text-sm font-medium text-ink-0 outline-none transition-[border-color,background] duration-100 ease-[ease] hover:border-line-1 focus:border-line-2 focus:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-60';
+
+const EDIT_INPUT_BASE =
+  'w-full min-w-0 rounded-xs border border-transparent bg-transparent px-1.5 py-[3px] font-mono text-xs font-normal text-ink-0 outline-none transition-[border-color,background] duration-100 ease-[ease] hover:border-line-1 focus:border-line-2 focus:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-60';
+
+const EXIT_PILL_INPUT_BASE =
+  'flex-1 min-w-[2ch] rounded-[2px] border border-transparent bg-transparent px-[3px] py-px font-mono text-xs font-medium text-ink-0 outline-none transition-[border-color,background] duration-100 ease-[ease] hover:border-line-1 focus:border-line-2 focus:bg-surface-0';
+
+const EXIT_PILL_TYPE_BASE =
+  'min-w-[3ch] rounded-[2px] border border-transparent bg-transparent px-[3px] py-px font-mono text-[9px] text-ink-2 outline-none transition-[border-color,background] duration-100 ease-[ease] hover:border-line-1 focus:border-line-2 focus:bg-surface-0 focus:text-ink-1';
 
 // A single exit pill — name editable, type editable, removable.
 interface ExitPillProps {
@@ -55,9 +72,9 @@ function ExitPill({ exitName, exitType, nodeId, busy, flow, onRenameExit, onChan
   }
 
   return (
-    <span className={styles.exitPill}>
+    <span className="flex items-center gap-0.5 rounded-xs border border-line-0 bg-surface-1 py-0.5 pl-1 pr-[3px] font-mono text-xs">
       <input
-        className={nameError ? `${styles.exitPillInput} ${styles.editInputError}` : styles.exitPillInput}
+        className={`${EXIT_PILL_INPUT_BASE} ${nameError ? ERROR_BORDER : ''}`}
         value={nameVal}
         disabled={busy}
         title={nameError ?? exitName}
@@ -72,7 +89,7 @@ function ExitPill({ exitName, exitType, nodeId, busy, flow, onRenameExit, onChan
         aria-label={`Exit name ${exitName}`}
       />
       <input
-        className={typeError ? `${styles.exitPillType} ${styles.editInputError}` : styles.exitPillType}
+        className={`${EXIT_PILL_TYPE_BASE} ${typeError ? ERROR_BORDER : ''}`}
         value={typeVal}
         disabled={busy}
         title={typeError ?? exitType}
@@ -88,7 +105,7 @@ function ExitPill({ exitName, exitType, nodeId, busy, flow, onRenameExit, onChan
       />
       <button
         type="button"
-        className={styles.exitRemove}
+        className="shrink-0 cursor-pointer rounded-[2px] border-0 bg-transparent px-0.5 py-px text-[10px] leading-none text-ink-3 transition-[color,background] duration-100 ease-[ease] hover:bg-surface-hover hover:text-ink-0 disabled:cursor-not-allowed disabled:opacity-40"
         onClick={handleRemove}
         disabled={busy}
         title={`Remove exit '${exitName}'`}
@@ -131,10 +148,10 @@ function AddExitRow({ busy, existingNames, onAdd, onCancel }: AddExitRowProps) {
   }
 
   return (
-    <span className={styles.exitPill}>
+    <span className="flex items-center gap-0.5 rounded-xs border border-line-0 bg-surface-1 py-0.5 pl-1 pr-[3px] font-mono text-xs">
       <input
         ref={nameRef}
-        className={error ? `${styles.exitPillInput} ${styles.editInputError}` : styles.exitPillInput}
+        className={`${EXIT_PILL_INPUT_BASE} ${error ? ERROR_BORDER : ''}`}
         value={name}
         placeholder="name"
         disabled={busy}
@@ -150,7 +167,7 @@ function AddExitRow({ busy, existingNames, onAdd, onCancel }: AddExitRowProps) {
         aria-label="New exit name"
       />
       <input
-        className={styles.exitPillType}
+        className={EXIT_PILL_TYPE_BASE}
         value={type}
         placeholder="type"
         disabled={busy}
@@ -191,7 +208,7 @@ function EditField({ value, original, busy, error, ariaLabel, onChange, onCommit
   const cancelledRef = useRef(false);
   return (
     <input
-      className={error ? `${styles.editInput} ${styles.editInputError}` : styles.editInput}
+      className={`${EDIT_INPUT_BASE} ${error ? ERROR_BORDER : ''}`}
       value={value}
       disabled={busy}
       title={error ?? original}
@@ -406,12 +423,18 @@ export function Inspector({
 
   if (!node) {
     return (
-      <div className={styles.root}>
-        <div className={styles.panelHeader}>
-          <span className={styles.panelTitle}>Inspector</span>
-          <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
+      <div className="flex h-full flex-col overflow-hidden bg-surface-0 text-xs text-ink-0">
+        <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-line-0 pl-3.5 pr-2.5">
+          <span className="flex-1 min-w-0 overflow-hidden">Inspector</span>
+          <button
+            type="button"
+            className="shrink-0 cursor-pointer rounded-xs border-0 bg-transparent px-[5px] py-1 text-[11px] leading-none text-ink-3 transition-[color,background] duration-100 ease-[ease] hover:bg-surface-hover hover:text-ink-0"
+            onClick={onDismiss}
+            title="Dismiss (Esc)"
+            aria-label="Dismiss inspector"
+          >✕</button>
         </div>
-        <div className={styles.loading}>loading…</div>
+        <div className="flex flex-1 items-center justify-center px-3.5 text-xs text-ink-3">loading…</div>
       </div>
     );
   }
@@ -423,14 +446,19 @@ export function Inspector({
     : nodeDiags.some(d => d.severity === 'warning') ? 'warning'
     : nodeDiags.length > 0 ? 'info' : null;
 
+  const diagBadgeColor =
+    worstSeverity === 'error' ? 'text-[#e05252]'
+    : worstSeverity === 'warning' ? 'text-[#d97706]'
+    : 'text-ink-3';
+
   return (
-    <div className={styles.root}>
-      <div className={styles.panelHeader}>
-        <span className={styles.kindChip}>{node.kind}</span>
-        <span className={styles.panelTitle}>
+    <div className="flex h-full flex-col overflow-hidden bg-surface-0 text-xs text-ink-0">
+      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-line-0 pl-3.5 pr-2.5">
+        <span className="shrink-0 rounded-xs border border-line-1 bg-transparent px-[5px] py-px text-[9px] font-medium uppercase tracking-[0.08em] text-ink-2">{node.kind}</span>
+        <span className="flex-1 min-w-0 overflow-hidden">
           <input
             ref={nameInputRef}
-            className={nameError ? `${styles.nameInput} ${styles.editInputError}` : styles.nameInput}
+            className={`${NAME_INPUT_BASE} ${nameError ? ERROR_BORDER : ''}`}
             value={nameValue}
             disabled={nameBusy}
             title={nameError ?? node.name}
@@ -452,7 +480,7 @@ export function Inspector({
         {worstSeverity && (
           <button
             type="button"
-            className={`${styles.diagBadge} ${worstSeverity === 'error' ? styles.diagBadgeError : worstSeverity === 'warning' ? styles.diagBadgeWarn : styles.diagBadgeInfo}`}
+            className={`shrink-0 cursor-pointer whitespace-nowrap rounded-xs border border-current bg-transparent px-[5px] py-px font-mono text-[9px] leading-[1.4] transition-opacity duration-100 ease-[ease] hover:opacity-75 ${diagBadgeColor}`}
             onClick={() => setDiagOpen((v) => !v)}
             title={`${nodeDiags.length} diagnostic${nodeDiags.length !== 1 ? 's' : ''}`}
             aria-label={`${nodeDiags.length} diagnostics`}
@@ -460,26 +488,38 @@ export function Inspector({
             ● {nodeDiags.length}
           </button>
         )}
-        <button type="button" className={styles.dismiss} onClick={onDismiss} title="Dismiss (Esc)" aria-label="Dismiss inspector">✕</button>
+        <button
+          type="button"
+          className="shrink-0 cursor-pointer rounded-xs border-0 bg-transparent px-[5px] py-1 text-[11px] leading-none text-ink-3 transition-[color,background] duration-100 ease-[ease] hover:bg-surface-hover hover:text-ink-0"
+          onClick={onDismiss}
+          title="Dismiss (Esc)"
+          aria-label="Dismiss inspector"
+        >✕</button>
       </div>
 
       {diagOpen && nodeDiags.length > 0 && (
-        <div ref={diagPopoverRef} className={styles.diagList}>
+        <div ref={diagPopoverRef} className="max-h-[160px] overflow-y-auto border-b border-line-0 bg-surface-1 py-1">
           {nodeDiags.map((d) => (
-            <div key={d.id} className={styles.diagRow}>
-              <span className={`${styles.diagDot} ${d.severity === 'error' ? styles.diagDotError : d.severity === 'warning' ? styles.diagDotWarn : styles.diagDotInfo}`} />
-              <span className={styles.diagMsg}>{d.message}</span>
+            <div key={d.id} className="flex items-start gap-1.5 px-3.5 py-1 font-mono text-xs text-ink-1">
+              <span
+                className={`mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                  d.severity === 'error' ? 'bg-[#e05252]'
+                  : d.severity === 'warning' ? 'bg-[#d97706]'
+                  : 'bg-ink-3'
+                }`}
+              />
+              <span className="min-w-0 flex-1 whitespace-normal leading-[1.4] [word-break:break-word]">{d.message}</span>
               {d.source_location && (d.source_location as { line?: number }).line != null && (
-                <span className={styles.diagLoc}>line {(d.source_location as { line: number }).line}</span>
+                <span className="shrink-0 pt-px text-[9px] text-ink-3">line {(d.source_location as { line: number }).line}</span>
               )}
             </div>
           ))}
         </div>
       )}
 
-      <div className={styles.fields}>
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>INPUT</span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-col gap-1 border-b border-line-0 px-3.5 py-2">
+          <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.08em] text-ink-2">INPUT</span>
           <EditField
             value={inputValue}
             original={node.input_type}
@@ -492,8 +532,8 @@ export function Inspector({
           />
         </div>
 
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>REF</span>
+        <div className="flex flex-col gap-1 border-b border-line-0 px-3.5 py-2">
+          <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.08em] text-ink-2">REF</span>
           <EditField
             value={refValue}
             original={node.ref}
@@ -506,9 +546,9 @@ export function Inspector({
           />
         </div>
 
-        <div className={styles.fieldRow}>
-          <span className={styles.fieldLabel}>EXITS</span>
-          <div className={styles.exitList}>
+        <div className="flex flex-col gap-1 border-b border-line-0 px-3.5 py-2">
+          <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.08em] text-ink-2">EXITS</span>
+          <div className="flex flex-col gap-1">
             {exits.map(([name, type]) => (
               <ExitPill
                 key={name}
@@ -533,7 +573,7 @@ export function Inspector({
             {!showAddExit && (
               <button
                 type="button"
-                className={styles.exitAdd}
+                className="cursor-pointer self-start rounded-xs border border-dashed border-line-1 bg-transparent px-2 py-[3px] text-xs leading-none text-ink-3 transition-[color,border-color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-0 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => setShowAddExit(true)}
                 disabled={exitsBusy}
                 title="Add exit"
@@ -544,11 +584,11 @@ export function Inspector({
         </div>
       </div>
 
-      <div className={styles.actions}>
+      <div className="flex shrink-0 flex-col gap-1.5 border-t border-line-0 px-3.5 py-2.5">
         {isSubflow ? (
           <button
             type="button"
-            className={styles.action}
+            className="cursor-pointer whitespace-nowrap rounded-xs border border-line-1 bg-transparent px-2.5 py-[5px] text-left font-[inherit] text-xs text-ink-1 transition-[border-color,color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-0"
             onClick={(e) => onOpenSource(node.name, e.shiftKey)}
             title="Shift-click to split"
           >
@@ -557,7 +597,7 @@ export function Inspector({
         ) : node.source_code ? (
           <button
             type="button"
-            className={styles.action}
+            className="cursor-pointer whitespace-nowrap rounded-xs border border-line-1 bg-transparent px-2.5 py-[5px] text-left font-[inherit] text-xs text-ink-1 transition-[border-color,color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-0"
             onClick={(e) => onOpenSource(node.name, e.shiftKey)}
             title="Shift-click to open as split"
           >
