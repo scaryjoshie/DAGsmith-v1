@@ -21,7 +21,12 @@ import { PythonIcon } from '../icons/BrandIcons';
 import { WorkflowNode } from '../nodes/WorkflowNode';
 import type { WorkflowNode as WorkflowNodeType } from '../nodes/WorkflowNode';
 import type { FlowView } from '../types';
-import styles from './FlowGraph.module.css';
+
+const EDGE_DELETE_BTN_CLASS =
+  'pointer-events-auto flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] border border-line-2 bg-surface-1 font-mono text-[11px] leading-none text-ink-1 transition-[background,border-color,color] duration-100 ease-[ease] hover:border-red hover:bg-red hover:text-white';
+
+const EDGE_ENDPOINT_HANDLE_CLASS =
+  'pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 cursor-crosshair rounded-full border-[1.5px] border-surface-0 bg-selection';
 
 const nodeTypes = { workflow: WorkflowNode };
 
@@ -59,16 +64,16 @@ function SelectableEdge({
         <EdgeLabelRenderer>
           {/* Endpoint handles — visual affordance for drag-to-reconnect */}
           <div
-            className={styles.edgeEndpointHandle}
+            className={EDGE_ENDPOINT_HANDLE_CLASS}
             style={{ left: sourceX, top: sourceY, position: 'absolute' }}
           />
           <div
-            className={styles.edgeEndpointHandle}
+            className={EDGE_ENDPOINT_HANDLE_CLASS}
             style={{ left: targetX, top: targetY, position: 'absolute' }}
           />
           {/* × delete badge at midpoint */}
           <button
-            className={styles.edgeDeleteBtn}
+            className={EDGE_DELETE_BTN_CLASS}
             style={{ position: 'absolute', left: labelX, top: labelY }}
             onClick={(e) => {
               e.stopPropagation();
@@ -540,8 +545,8 @@ function FlowGraphInner({
 
   return (
     <EdgeDeleteContext.Provider value={onDeleteEdge}>
-      <div className={styles.root}>
-        <div className={styles.canvas}>
+      <div className="flex h-full w-full min-h-0 flex-col">
+        <div className="flow-graph-canvas relative min-h-0 flex-1">
           <ReactFlow
             nodes={decoratedNodes}
             edges={decoratedEdges}

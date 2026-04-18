@@ -35,3 +35,9 @@
   border-right: 1px solid var(--border-0);
   color: var(--fg-3);
 }
+
+/* FlowGraph: suppress React Flow's default selection outline — we render
+ * our own focus ring via box-shadow on the inner node div in WorkflowNode. */
+.flow-graph-canvas .react-flow__node.selected {
+  outline: none !important;
+}
