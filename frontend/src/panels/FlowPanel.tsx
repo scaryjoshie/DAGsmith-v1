@@ -14,7 +14,6 @@ import {
 import type { FlowView, LayoutPositions } from '../types';
 import { useSelection } from '../SelectionContext';
 import { registerFlowRefetch, registerPanToNode } from '../App';
-import styles from './FlowPanel.module.css';
 
 export interface FlowPanelParams {
   workspaceName: string;
@@ -172,7 +171,7 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
 
   if (!flow) {
     return (
-      <div style={{ padding: 16, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>
+      <div className="p-4 font-mono text-sm text-ink-2">
         {toastMsg ? (
           <Toast message={toastMsg} onDismiss={() => setToastMsg(null)} />
         ) : 'loading…'}
@@ -181,7 +180,7 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
   }
 
   return (
-    <div className={styles.panel}>
+    <div className="relative flex h-full w-full flex-col">
       {toastMsg && <Toast message={toastMsg} onDismiss={() => setToastMsg(null)} />}
       <FlowGraph
         flow={flow}
