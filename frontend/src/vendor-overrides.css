@@ -17,3 +17,21 @@
   display: inline-block;
   vertical-align: middle;
 }
+
+/* SourceTab CodeMirror surface: full-height editor flush with the dark
+ * surface-0 background, mono font, and a 1px gutter divider in line-0. */
+.source-tab-editor .cm-editor {
+  height: 100%;
+  font-size: var(--text-sm);
+  background: var(--bg-0);
+}
+
+.source-tab-editor .cm-scroller {
+  font-family: var(--font-mono);
+}
+
+.source-tab-editor .cm-gutters {
+  background: var(--bg-0);
+  border-right: 1px solid var(--border-0);
+  color: var(--fg-3);
+}
