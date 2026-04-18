@@ -8,7 +8,7 @@ import { shortName } from '../lib/typeRefs';
 // CSS-Module rule maps to a single source of truth and so error variants
 // can compose cleanly via template strings.
 
-const ERROR_BORDER = '!border-[#e05252]';
+const ERROR_BORDER = '!border-red';
 
 const NAME_INPUT_BASE =
   'w-full min-w-0 rounded-xs border border-transparent bg-transparent px-[5px] py-0.5 font-mono text-sm font-medium text-ink-0 outline-none transition-[border-color,background] duration-100 ease-[ease] hover:border-line-1 focus:border-line-2 focus:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-60';
@@ -447,8 +447,8 @@ export function Inspector({
     : nodeDiags.length > 0 ? 'info' : null;
 
   const diagBadgeColor =
-    worstSeverity === 'error' ? 'text-[#e05252]'
-    : worstSeverity === 'warning' ? 'text-[#d97706]'
+    worstSeverity === 'error' ? 'text-red'
+    : worstSeverity === 'warning' ? 'text-amber-muted'
     : 'text-ink-3';
 
   return (
@@ -503,8 +503,8 @@ export function Inspector({
             <div key={d.id} className="flex items-start gap-1.5 px-3.5 py-1 font-mono text-xs text-ink-1">
               <span
                 className={`mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                  d.severity === 'error' ? 'bg-[#e05252]'
-                  : d.severity === 'warning' ? 'bg-[#d97706]'
+                  d.severity === 'error' ? 'bg-red'
+                  : d.severity === 'warning' ? 'bg-amber-muted'
                   : 'bg-ink-3'
                 }`}
               />

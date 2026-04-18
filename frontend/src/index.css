@@ -28,9 +28,9 @@
   --color-blue: var(--blue);
   --color-red: var(--red);
   --color-amber: var(--amber);
+  --color-amber-muted: var(--amber-muted);
+  --color-green: var(--green);
   --color-selection: var(--selection);
-  --color-severity-blocking: var(--severity-blocking);
-  --color-severity-warning: var(--severity-warning);
 
   --radius-none: var(--radius-0);
   --radius-xs: var(--radius-1);
@@ -72,10 +72,10 @@
     --accent: #fafafa;
     --blue: #0070f3;
     --red: #e5484d;
-    --amber: #f5a623;
+    --amber: #f59e0b;
+    --amber-muted: #d97706;
+    --green: #4caf50;
     --selection: #3b82f6;
-    --severity-blocking: #ef4444;
-    --severity-warning: #f59e0b;
 
     --radius-0: 0;
     --radius-1: 2px;

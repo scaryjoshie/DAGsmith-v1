@@ -34,8 +34,8 @@ function buildGroups(diagnostics: DiagnosticView[]): DiagGroup[] {
 }
 
 function severityDotColor(severity: DiagnosticView['severity']): string {
-  if (severity === 'error') return 'bg-[#e05252]';
-  if (severity === 'warning') return 'bg-[#d97706]';
+  if (severity === 'error') return 'bg-red';
+  if (severity === 'warning') return 'bg-amber-muted';
   return 'bg-ink-3';
 }
 
@@ -66,7 +66,7 @@ export function DiagnosticsSection({ diagnostics, onSelectNode }: DiagnosticsSec
   if (diagnostics.length === 0) {
     return (
       <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-ink-3">
-        <span className="text-[11px] text-[#4caf50]">✓</span>
+        <span className="text-[11px] text-green">✓</span>
         <span>No issues</span>
       </div>
     );

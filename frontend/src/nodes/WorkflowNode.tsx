@@ -67,9 +67,9 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
   const hasSwitcher = exits.length > 1;
 
   const severityClass = data.severity === 'blocking'
-    ? 'wf-severity-blocking !border-severity-blocking hover:!border-severity-blocking'
+    ? 'wf-severity-blocking !border-red hover:!border-red'
     : data.severity === 'warning'
-      ? 'wf-severity-warning !border-severity-warning hover:!border-severity-warning'
+      ? 'wf-severity-warning !border-amber hover:!border-amber'
       : '';
 
   const snapTargetClass = data.snapTarget

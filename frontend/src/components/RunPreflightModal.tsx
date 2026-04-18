@@ -50,7 +50,7 @@ export function RunPreflightModal({
               >
                 <span
                   className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
-                    d.severity === 'error' ? 'bg-[#e05252]' : 'bg-[#d97706]'
+                    d.severity === 'error' ? 'bg-red' : 'bg-amber-muted'
                   }`}
                 />
                 <span className="flex-1 font-mono text-xs leading-[1.5] text-ink-1 [word-break:break-word]">{d.message}</span>

@@ -534,8 +534,8 @@ function FlowGraphInner({
         return {
           ...e,
           data: { ...(e.data as object), mismatch: true },
-          style: { stroke: 'var(--severity-blocking)', strokeWidth: 1.6 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--severity-blocking)', width: 22, height: 22 },
+          style: { stroke: 'var(--red)', strokeWidth: 1.6 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--red)', width: 22, height: 22 },
         };
       }
       return e;

@@ -57,7 +57,7 @@
    * ring on our inner divs. The ring beats severity coloring (highest priority
    * border treatment) and switches the dashed terminal border to solid for
    * sharper selection feedback. The base-layer wrapping is load-bearing here:
-   * without it, `.\!border-severity-blocking` (utilities) would paint over the
+   * without it, `.\!border-red` (utilities) would paint over the
    * selection-blue border on severity-flagged selected nodes. */
   .flow-graph-canvas .react-flow__node.selected .wf-process,
   .flow-graph-canvas .react-flow__node.selected .wf-terminal {
@@ -147,17 +147,6 @@
     font-size: 12px;
     border-radius: 0;
     padding: 0 10px;
-  }
-
-  /* Active tab: bottom border accent */
-  .dagsmith-theme .dv-tab.active-tab {
-    border-bottom: 1px solid var(--fg-0);
-  }
-
-  /* Inactive tab hover */
-  .dagsmith-theme .dv-tab:not(.active-tab):hover {
-    background-color: var(--bg-2) !important;
-    color: var(--fg-1);
   }
 
   /* Close button */
