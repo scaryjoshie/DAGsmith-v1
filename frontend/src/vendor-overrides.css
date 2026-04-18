@@ -41,3 +41,27 @@
 .flow-graph-canvas .react-flow__node.selected {
   outline: none !important;
 }
+
+/* WorkflowNode: when react-flow marks a node selected, paint a 2px selection
+ * ring on our inner divs. The ring beats severity coloring (highest priority
+ * border treatment) and switches the dashed terminal border to solid for
+ * sharper selection feedback.
+ *
+ * Wrapped in @layer base so its !important wins over Tailwind's `!`-prefixed
+ * severity utilities (which live in @layer utilities). Per CSS Cascade L5,
+ * `!important` declarations from an EARLIER-declared layer beat `!important`
+ * declarations from a LATER one — Tailwind v4's auto layer order is
+ * `theme, base, components, utilities`, so base !important wins. Without
+ * this wrapping, `.\!border-severity-blocking` (utilities) would paint over
+ * the selection-blue border on severity-flagged selected nodes. */
+@layer base {
+  .flow-graph-canvas .react-flow__node.selected .wf-process,
+  .flow-graph-canvas .react-flow__node.selected .wf-terminal {
+    border-color: var(--selection) !important;
+    box-shadow: 0 0 0 2px var(--selection);
+  }
+
+  .flow-graph-canvas .react-flow__node.selected .wf-terminal {
+    border-style: solid !important;
+  }
+}

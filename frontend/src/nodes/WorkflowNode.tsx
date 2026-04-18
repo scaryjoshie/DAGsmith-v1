@@ -1,6 +1,5 @@
 import { Handle, Position, useConnection, type NodeProps, type Node } from '@xyflow/react';
 import { useRef, useState, type ReactNode } from 'react';
-import styles from './WorkflowNode.module.css';
 
 export type WorkflowNodeData = {
   label: string;
@@ -20,29 +19,42 @@ export type WorkflowNodeData = {
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
 
+// Inner-class names that the vendor-overrides.css selection rule looks
+// for: `.flow-graph-canvas .react-flow__node.selected .wf-process` etc.
+// Don't rename without also updating vendor-overrides.css.
+const PROCESS_BASE =
+  'wf-process group relative flex min-w-[260px] flex-col rounded-xs border border-line-2 bg-surface-1 font-mono tracking-[-0.01em] text-ink-0 transition-[border-color] duration-100 ease-[ease] hover:border-ink-2 hover:bg-surface-2';
+
+const TERMINAL_BASE =
+  'wf-terminal group flex min-w-[84px] items-center justify-center gap-2 rounded-xs border border-dashed border-line-1 bg-surface-0 px-[18px] py-[7px] font-mono text-sm font-normal tracking-[0.01em] text-ink-2 transition-[border-color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-1';
+
+const HANDLE_BASE =
+  '!h-[7px] !w-[7px] !rounded-none !border !border-[var(--fg-2)] !bg-[var(--fg-2)] !opacity-0 transition-opacity duration-150 ease-[ease] group-hover:!opacity-100 hover:!bg-[var(--fg-0)] hover:!border-[var(--fg-0)]';
+
+const HANDLE_VISIBLE_EXTRA = '!opacity-100';
+
+const SWITCHER_HANDLE_BASE =
+  '!h-[7px] !w-[7px] !rounded-none !border !border-[var(--fg-2)] !bg-[var(--fg-2)] !opacity-0 !left-1/2 transition-opacity duration-150 ease-[ease] group-hover:!opacity-100 hover:!bg-[var(--fg-0)] hover:!border-[var(--fg-0)]';
+
 export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
   const connection = useConnection();
   const isConnecting = !!connection.fromNode;
   const isTerminal = data.variant === 'terminal';
 
   if (isTerminal) {
-    const handleClass = isConnecting ? `${styles.handle} ${styles.handleVisible}` : styles.handle;
-    const terminalSeverityClass = data.severity === 'blocking'
-      ? styles.severityBlocking
-      : data.severity === 'warning' ? styles.severityWarning : null;
-    const terminalClass = [styles.terminal, terminalSeverityClass].filter(Boolean).join(' ');
+    const handleClass = isConnecting ? `${HANDLE_BASE} ${HANDLE_VISIBLE_EXTRA}` : HANDLE_BASE;
     return (
-      <div className={terminalClass}>
+      <div className={TERMINAL_BASE}>
         <Handle type="target" position={Position.Top} id="in" className={handleClass} />
         {data.icon && (
           <span
-            className={styles.iconSlot}
+            className="flex h-5 w-5 shrink-0 items-center justify-center text-ink-2"
             style={{ background: data.iconBg, color: data.iconColor }}
           >
             {data.icon}
           </span>
         )}
-        <span className={styles.label}>{data.label}</span>
+        <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{data.label}</span>
       </div>
     );
   }
@@ -53,22 +65,25 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
     ? [...data.exitOrder.filter((e) => rawExits.includes(e)), ...rawExits.filter((e) => !data.exitOrder!.includes(e))]
     : rawExits;
   const hasSwitcher = exits.length > 1;
+
   const severityClass = data.severity === 'blocking'
-    ? styles.severityBlocking
+    ? 'wf-severity-blocking !border-severity-blocking hover:!border-severity-blocking'
     : data.severity === 'warning'
-      ? styles.severityWarning
-      : null;
-  const processClass = [
-    styles.process,
-    data.snapTarget ? styles.snapTarget : null,
-    severityClass,
-    data.snappedAbove ? styles.snappedAbove : null,
-    data.snappedBelow ? styles.snappedBelow : null,
-  ].filter(Boolean).join(' ');
-  const handleClass = isConnecting ? `${styles.handle} ${styles.handleVisible}` : styles.handle;
+      ? 'wf-severity-warning !border-severity-warning hover:!border-severity-warning'
+      : '';
+
+  const snapTargetClass = data.snapTarget
+    ? 'border-b-2 !border-b-[var(--selection)] shadow-[0_2px_0_0_var(--selection)]'
+    : '';
+
+  const snappedAboveClass = data.snappedAbove ? 'rounded-b-none' : '';
+  const snappedBelowClass = data.snappedBelow ? 'rounded-t-none border-t-0' : '';
+
+  const processClass = `${PROCESS_BASE} ${severityClass} ${snapTargetClass} ${snappedAboveClass} ${snappedBelowClass}`;
+  const handleClass = isConnecting ? `${HANDLE_BASE} ${HANDLE_VISIBLE_EXTRA}` : HANDLE_BASE;
   const switcherHandleClass = isConnecting
-    ? `${styles.switcherHandle} ${styles.handleVisible}`
-    : styles.switcherHandle;
+    ? `${SWITCHER_HANDLE_BASE} ${HANDLE_VISIBLE_EXTRA}`
+    : SWITCHER_HANDLE_BASE;
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -107,28 +122,33 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
   return (
     <div className={processClass}>
       <Handle type="target" position={Position.Top} id="in" className={handleClass} />
-      <div className={styles.body}>
+      <div className="flex items-center gap-3 px-[18px] py-3 text-lg">
         {data.icon && (
           <span
-            className={styles.iconSlot}
+            className="flex h-5 w-5 shrink-0 items-center justify-center text-ink-2"
             style={{ background: data.iconBg, color: data.iconColor }}
           >
             {data.icon}
           </span>
         )}
-        <span className={styles.label}>{data.label}</span>
+        <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{data.label}</span>
       </div>
       {hasSwitcher ? (
-        <div className={styles.switcher}>
+        <div className="flex rounded-b-xs border-t border-line-2 bg-surface-2">
           {exits.map((exit, idx) => {
             const isDragging = dragIndex === idx;
             const isDropTarget = dropIndex === idx && dragIndex !== null && dragIndex !== idx;
             const fanCount = data.fanOutCounts?.[exit];
             const isFanOut = fanCount !== undefined && fanCount > 1;
-            let cellClass = styles.switcherCell;
-            if (isDragging) cellClass += ` ${styles.switcherCellDragging}`;
-            if (isDropTarget) cellClass += ` ${styles.switcherCellDropTarget}`;
-            if (isFanOut) cellClass += ` ${styles.switcherCellFanOut}`;
+            const cellBaseBg = isFanOut
+              ? 'bg-[color-mix(in_srgb,var(--amber)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--amber)_14%,var(--bg-3))]'
+              : 'hover:bg-surface-3';
+            const cellClass = [
+              'relative min-w-[72px] flex-[1_0_auto] whitespace-nowrap border-r border-line-2 px-3.5 py-[7px] text-center font-mono text-xs tracking-[-0.01em] text-ink-1 transition-[background,color] duration-100 ease-[ease] hover:text-ink-0 last:border-r-0',
+              cellBaseBg,
+              isDragging ? 'opacity-40' : '',
+              isDropTarget ? '!bg-surface-3 border-l-2 border-l-[var(--selection)]' : '',
+            ].filter(Boolean).join(' ');
             return (
               <div
                 key={exit}
@@ -139,9 +159,9 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
                 onPointerMove={handleCellPointerMove(idx)}
                 onPointerUp={handleCellPointerUp}
               >
-                <span className={styles.switcherLabel}>
+                <span className="pointer-events-none block">
                   {exit}
-                  {isFanOut && <span className={styles.fanOutGlyph}>×{fanCount}</span>}
+                  {isFanOut && <span className="pointer-events-none ml-1 text-[10px] text-amber opacity-85">×{fanCount}</span>}
                 </span>
                 <Handle
                   type="source"
@@ -159,10 +179,10 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
             const fanCount = data.fanOutCounts?.[exits[0]];
             return fanCount !== undefined && fanCount > 1 ? (
               <div
-                className={styles.fanOutBar}
+                className="flex items-center justify-center rounded-b-xs border-t border-line-2 bg-[color-mix(in_srgb,var(--amber)_8%,transparent)] pt-1 pb-[3px] font-mono text-xs tracking-[-0.01em] text-amber"
                 title={`fan-out: ${fanCount} targets`}
               >
-                <span className={styles.fanOutGlyph}>×{fanCount}</span>
+                <span className="pointer-events-none ml-1 text-[10px] text-amber opacity-85">×{fanCount}</span>
               </div>
             ) : null;
           })()}
