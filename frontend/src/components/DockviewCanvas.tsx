@@ -4,7 +4,6 @@ import { FlowPanel, type FlowPanelParams } from '../panels/FlowPanel';
 import { SourcePanel } from '../panels/SourcePanel';
 import { FlowIcon, PythonIcon } from '../icons/BrandIcons';
 import type { WorkspaceView } from '../types';
-import styles from './DockviewCanvas.module.css';
 
 function FlowTab({ api }: IDockviewPanelHeaderProps) {
   return (
@@ -179,7 +178,7 @@ export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActiveP
   }, [workspace]);
 
   return (
-    <div className={`${styles.wrapper} dagsmith-theme`}>
+    <div className="dagsmith-theme h-full w-full">
       <DockviewReact components={components} tabComponents={tabComponents} onReady={onReady} />
     </div>
   );
