@@ -187,6 +187,7 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
         onNodePositionChange={handleNodePositionChange}
         onReconnectEdge={handleReconnectEdge}
         onExitsReorder={handleExitsReorder}
+        onToast={showToast}
         onReady={handleFlowGraphReady}
       />
     </div>

@@ -14,8 +14,7 @@
       "ref": ".normalize:process",
       "input": "examples.customer.onboarding.types.records.RawCustomer",
       "exits": {
-        "out": "examples.customer.onboarding.types.records.NormalizedCustomer",
-        "weed": "typing.Any"
+        "out": "examples.customer.onboarding.types.records.NormalizedCustomer"
       }
     },
     "validate_email": {
@@ -65,11 +64,6 @@
   },
   "edges": [
     {
-      "from_node": "_start",
-      "from_exit": "out",
-      "to_node": "normalize"
-    },
-    {
       "from_node": "normalize",
       "from_exit": "out",
       "to_node": "validate_email"
@@ -98,20 +92,41 @@
       "from_node": "normalize",
       "from_exit": "out",
       "to_node": "enrich"
+    },
+    {
+      "from_node": "_start",
+      "from_exit": "out",
+      "to_node": "normalize"
     }
   ],
   "layout": {
     "nodes": {
       "validate_email": {
-        "x": 48.0,
-        "y": 112.0
+        "x": -160.0,
+        "y": 32.0
       },
       "normalize": {
-        "x": 368.0,
-        "y": -16.0
+        "x": 96.0,
+        "y": -144.0
       },
       "validate_age": {
-        "x": 240.0,
+        "x": -192.0,
+        "y": 176.0
+      },
+      "_start": {
+        "x": 144.0,
+        "y": -224.0
+      },
+      "score": {
+        "x": 96.0,
+        "y": 395.0
+      },
+      "classify": {
+        "x": 96.0,
+        "y": 469.0
+      },
+      "enrich": {
+        "x": 96.0,
         "y": 320.0
       }
     },

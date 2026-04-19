@@ -122,6 +122,7 @@ interface FlowGraphProps {
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
   onReconnectEdge: (fromNode: string, fromExit: string, newConnection: Connection) => void;
   onExitsReorder: (nodeId: string, newOrder: string[]) => void;
+  onToast?: (message: string) => void;
   onReady?: (panToNode: (nodeId: string) => void) => void;
 }
 
@@ -142,6 +143,7 @@ function FlowGraphInner({
   onNodePositionChange,
   onReconnectEdge,
   onExitsReorder,
+  onToast,
   onReady,
 }: FlowGraphProps) {
   const { setCenter, getNode, getViewport } = useReactFlow();
@@ -408,15 +410,35 @@ function FlowGraphInner({
   );
 
   const handleBeforeDelete = useCallback(
-    async ({ nodes: nodesToDelete }: { nodes: GraphNode[]; edges: Edge[] }) => {
-      if (nodesToDelete.length === 0) return true;
-      const names = nodesToDelete.map((n) => n.id).join(', ');
-      const label = nodesToDelete.length === 1
+    async ({ nodes: nodesToDelete, edges: edgesToDelete }: { nodes: GraphNode[]; edges: Edge[] }) => {
+      // SPEC §12 line 427: start sentinels are structural, not user content.
+      // Strip them from the deletable set. If the selection contained ONLY
+      // start nodes, surface a toast and refuse outright (the cascade edges
+      // would leave a broken flow).
+      const startIds = new Set(
+        Object.entries(flow.nodes)
+          .filter(([, n]) => n.kind === 'start')
+          .map(([id]) => id),
+      );
+      const deletable = nodesToDelete.filter((n) => !startIds.has(n.id));
+      const startOnly =
+        nodesToDelete.length > 0 && deletable.length === 0;
+      if (startOnly) {
+        onToast?.('Start node cannot be deleted');
+        return false;
+      }
+      if (deletable.length === 0) {
+        // edge-only delete — no confirm, pass through.
+        return edgesToDelete.length > 0;
+      }
+      const names = deletable.map((n) => n.id).join(', ');
+      const label = deletable.length === 1
         ? `Delete node '${names}' and its edges?`
         : `Delete nodes ${names} and their edges?`;
-      return window.confirm(label);
+      if (!window.confirm(label)) return false;
+      return { nodes: deletable, edges: edgesToDelete };
     },
-    [],
+    [flow.nodes, onToast],
   );
 
   const cachedViewport = viewportCache.get(flow.id);
@@ -598,7 +620,7 @@ function FlowGraphInner({
             defaultEdgeOptions={{ type: 'selectable' }}
             defaultViewport={cachedViewport}
             fitView={!cachedViewport}
-            fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+            fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
             onViewportChange={handleViewportChange}
             proOptions={{ hideAttribution: true }}
             nodesDraggable
