@@ -152,7 +152,13 @@ class Workspace:
         loaded = self._require_loaded(flow_id)
         spec = loaded.spec
 
-        # Also diagnosed at load (missing_entry_node); this is the invoke-time trap.
+        # Also diagnosed at load (missing_start_node / ambiguous_start_node);
+        # this is the invoke-time trap. entry_node is a computed property that
+        # returns "" when zero or >1 start nodes exist.
+        if not spec.entry_node:
+            raise WorkspaceError(
+                f"flow {flow_id!r} has no unique start node; cannot invoke"
+            )
         if spec.entry_node not in spec.nodes:
             raise WorkspaceError(
                 f"entry_node {spec.entry_node!r} is not declared in flow {flow_id!r}"
@@ -173,7 +179,14 @@ class Workspace:
                 )
             node_spec = spec.nodes[node_id]
 
-            if node_spec.kind == "flow":
+            if node_spec.kind == "start":
+                # SPEC §12 line 427: start is a virtual entry sentinel. No
+                # ref, no callable — just pass the input payload straight
+                # through the implicit "out" handle.
+                exit_name = DEFAULT_EXIT_NAME
+                new_value = payload
+                visited[node_id] = new_value
+            elif node_spec.kind == "flow":
                 subflow_id = node_spec.ref
                 if subflow_id not in self._flows:
                     raise WorkspaceError(
@@ -455,22 +468,39 @@ def _collect_shape_diagnostics(
 ) -> list[Diagnostic]:
     """Load-time shape checks that used to raise pre-M1.
 
-    Emits diagnostics for: missing entry_node (not in spec.nodes), and flows
-    with no inferred public exits.
+    Emits diagnostics for: missing / ambiguous start node (SPEC §12 line 427),
+    and flows with no inferred public exits.
     """
     diagnostics: list[Diagnostic] = []
 
-    if spec.entry_node and spec.entry_node not in spec.nodes:
+    # Start-node shape (SPEC §12 line 427): every flow must declare exactly
+    # one `kind="start"` node. Zero → missing_start_node; ≥2 → ambiguous.
+    start_ids = sorted(
+        nid for nid, n in spec.nodes.items() if n.kind == "start"
+    )
+    if len(start_ids) == 0:
         diagnostics.append(
             Diagnostic(
                 severity="error",
-                code="missing_entry_node",
+                code="missing_start_node",
                 message=(
-                    f"flow {flow_id!r}: entry_node {spec.entry_node!r} is not "
-                    f"declared in nodes"
+                    f"flow {flow_id!r}: no start node — expected exactly one "
+                    f'node with kind="start" (the virtual entry sentinel)'
                 ),
                 flow_id=flow_id,
-                detail={"entry_node": spec.entry_node},
+            )
+        )
+    elif len(start_ids) > 1:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="ambiguous_start_node",
+                message=(
+                    f"flow {flow_id!r}: multiple start nodes {start_ids!r} — "
+                    f'expected exactly one node with kind="start"'
+                ),
+                flow_id=flow_id,
+                detail={"start_nodes": start_ids},
             )
         )
 

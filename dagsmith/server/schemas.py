@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -86,7 +86,15 @@ class UpdateSourceResponse(BaseModel):
 
 
 class AddNodeRequest(BaseModel):
+    """UI → server node-creation payload.
+
+    `kind` is restricted to `"python"` and `"flow"` — the `"start"`
+    sentinel cannot be user-added via this endpoint (SPEC §12 line 427;
+    start nodes are structural, not semantic user content).
+    """
+
     name: str
+    kind: Literal["python", "flow"] = "python"
     ref: str = ""
     input_type: str = Field(default="typing.Any", alias="input")
     exits: dict[str, str] = Field(default_factory=lambda: {"out": "typing.Any"})

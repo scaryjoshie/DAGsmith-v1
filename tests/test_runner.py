@@ -56,13 +56,30 @@ def _flow(
     entry: str,
     input_type: str = "Any",
 ) -> FlowSpec:
+    """Build a FlowSpec, auto-prepending a kind=start sentinel wired to `entry`.
+
+    This is a test-helper convenience so each test doesn't spell out the
+    start boilerplate. If `nodes` already contains a `kind="start"` node,
+    we leave it alone.
+    """
+    full_nodes = dict(nodes)
+    full_edges = list(edges)
+    if not any(n.kind == "start" for n in full_nodes.values()):
+        full_nodes["_start"] = NodeSpec.model_validate(
+            {
+                "kind": "start",
+                "input": input_type,
+                "exits": {"out": input_type},
+            }
+        )
+        full_edges.insert(
+            0, EdgeSpec(from_node="_start", from_exit="out", to_node=entry)
+        )
     return FlowSpec.model_validate(
         {
             "id": flow_id,
-            "input": input_type,
-            "nodes": dict(nodes),
-            "edges": [e.model_dump() for e in edges],
-            "entry_node": entry,
+            "nodes": full_nodes,
+            "edges": [e.model_dump() for e in full_edges],
         }
     )
 
@@ -351,9 +368,12 @@ def test_tracer_receives_edges_in_order_including_subflow_frames():
     assert result.value == 212
 
     # Terminal leaf exits still fire the tracer, with to==exit_name (the
-    # public exit name under the Infer model).
+    # public exit name under the Infer model). The _start sentinel fires
+    # its own edge (start → entry) at the top of each flow invocation.
     assert events == [
+        ("parent", "_start", "out", "parent_entry", 5),
         ("parent", "parent_entry", "out", "sub_node", 5),
+        ("sub", "_start", "out", "sub_entry", 5),
         ("sub", "sub_entry", "out", "sub_tail", 105),
         ("sub", "sub_tail", "done", "done", 106),
         ("parent", "sub_node", "done", "parent_tail", 106),

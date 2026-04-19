@@ -84,12 +84,35 @@ class TestFlowSpec:
         reparsed = FlowSpec.model_validate(dumped)
         assert reparsed == spec
 
-    def test_unknown_entry_node_accepted_and_round_trips(self):
+    def test_entry_node_is_computed_from_start_node(self):
+        """SPEC §12 line 427: `entry_node` is a computed field, derived from
+        the unique `kind="start"` node. Legacy stored `entry_node` values
+        in flow.json are stripped (extra='ignore')."""
         raw = _valid_flow_raw()
-        raw["entry_node"] = "nonexistent"
+        raw["entry_node"] = "legacy_ignored_name"
+        raw["nodes"]["_start"] = {
+            "kind": "start",
+            "input": "pkg.In",
+            "exits": {"out": "pkg.In"},
+        }
         spec = FlowSpec.model_validate(raw)
-        assert spec.entry_node == "nonexistent"
-        assert FlowSpec.model_validate(spec.model_dump(by_alias=True)) == spec
+        assert spec.entry_node == "_start"
+
+    def test_entry_node_empty_when_no_start(self):
+        raw = _valid_flow_raw()
+        spec = FlowSpec.model_validate(raw)
+        assert spec.entry_node == ""
+
+    def test_entry_node_empty_when_multiple_starts(self):
+        raw = _valid_flow_raw()
+        raw["nodes"]["_start_a"] = {
+            "kind": "start", "input": "pkg.In", "exits": {"out": "pkg.In"},
+        }
+        raw["nodes"]["_start_b"] = {
+            "kind": "start", "input": "pkg.In", "exits": {"out": "pkg.In"},
+        }
+        spec = FlowSpec.model_validate(raw)
+        assert spec.entry_node == ""
 
     def test_unknown_top_level_field_tolerated(self):
         raw = _valid_flow_raw()

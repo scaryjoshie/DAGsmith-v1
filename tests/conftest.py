@@ -18,6 +18,9 @@ from typing import Any, Callable
 import pytest
 
 
+_START_NODE_ID = "_start"
+
+
 def _write_flow(
     root: Path,
     flow_id: str,
@@ -27,21 +30,45 @@ def _write_flow(
 ) -> None:
     """Write a flow.json under root/flow_id/ (dots become nested dirs).
 
+    Test-helper convention: the caller passes `entry_node` naming the first
+    compute node they want the flow to reach. The helper auto-prepends a
+    `kind="start"` sentinel (id `_start`) and wires `_start → entry_node`,
+    so fixtures don't spell out the start boilerplate every time. This is
+    NOT runtime synth — the real loader never creates start nodes. Test
+    fixtures are drafts; we help them along.
+
+    If `entry_node` already names a `kind="start"` node in `nodes`, the
+    caller opted out and we leave things as-is.
+
     Under the Infer model (SPEC §12 line 425), public_exits is derived from
-    unconnected source handles — the caller does not pass it. Shape leafage
-    is controlled by what's in `edges`.
+    unconnected source handles — the caller does not pass it.
     """
     flow_dir = root / Path(*flow_id.split("."))
     flow_dir.mkdir(parents=True, exist_ok=True)
     (flow_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    full_nodes = dict(nodes)
+    full_edges = list(edges)
+    entry_spec = full_nodes.get(entry_node)
+    entry_is_start = isinstance(entry_spec, dict) and entry_spec.get("kind") == "start"
+    if not entry_is_start and _START_NODE_ID not in full_nodes:
+        full_nodes[_START_NODE_ID] = {
+            "kind": "start",
+            "input": "typing.Any",
+            "exits": {"out": "typing.Any"},
+        }
+        # prepend so it appears as the wiring source
+        full_edges = [
+            {"from_node": _START_NODE_ID, "from_exit": "out", "to_node": entry_node},
+            *full_edges,
+        ]
+
     (flow_dir / "flow.json").write_text(
         json.dumps(
             {
                 "id": flow_id,
-                "input": "typing.Any",
-                "entry_node": entry_node,
-                "nodes": nodes,
-                "edges": edges,
+                "nodes": full_nodes,
+                "edges": full_edges,
             }
         ),
         encoding="utf-8",
@@ -198,9 +225,12 @@ def _build_server_workspace(tmp_path: Path, pkg_name: str) -> Path:
         json.dumps(
             {
                 "id": "hello",
-                "input": "typing.Any",
-                "entry_node": "greet",
                 "nodes": {
+                    "_start": {
+                        "kind": "start",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "greet": {
                         "kind": "python",
                         "ref": ".greet:process",
@@ -221,6 +251,7 @@ def _build_server_workspace(tmp_path: Path, pkg_name: str) -> Path:
                     },
                 },
                 "edges": [
+                    {"from_node": "_start", "from_exit": "out", "to_node": "greet"},
                     {"from_node": "greet", "from_exit": "out", "to_node": "trailer"},
                 ],
             }
@@ -329,9 +360,12 @@ def nested_server_pkg(tmp_path: Path):
         json.dumps(
             {
                 "id": "parent",
-                "input": "typing.Any",
-                "entry_node": "call_child",
                 "nodes": {
+                    "_start": {
+                        "kind": "start",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "call_child": {
                         "kind": "flow",
                         "ref": "parent.child",
@@ -339,7 +373,9 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [],
+                "edges": [
+                    {"from_node": "_start", "from_exit": "out", "to_node": "call_child"}
+                ],
             }
         ),
         encoding="utf-8",
@@ -352,9 +388,12 @@ def nested_server_pkg(tmp_path: Path):
         json.dumps(
             {
                 "id": "parent.child",
-                "input": "typing.Any",
-                "entry_node": "leaf",
                 "nodes": {
+                    "_start": {
+                        "kind": "start",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "leaf": {
                         "kind": "python",
                         "ref": "builtins:id",
@@ -362,7 +401,9 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [],
+                "edges": [
+                    {"from_node": "_start", "from_exit": "out", "to_node": "leaf"}
+                ],
             }
         ),
         encoding="utf-8",
@@ -376,9 +417,12 @@ def nested_server_pkg(tmp_path: Path):
         json.dumps(
             {
                 "id": "sibling",
-                "input": "typing.Any",
-                "entry_node": "leaf",
                 "nodes": {
+                    "_start": {
+                        "kind": "start",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "leaf": {
                         "kind": "python",
                         "ref": "builtins:id",
@@ -386,7 +430,9 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [],
+                "edges": [
+                    {"from_node": "_start", "from_exit": "out", "to_node": "leaf"}
+                ],
             }
         ),
         encoding="utf-8",
@@ -475,9 +521,12 @@ def typed_server_pkg(tmp_path: Path):
         json.dumps(
             {
                 "id": "hello",
-                "input": "typing.Any",
-                "entry_node": "go",
                 "nodes": {
+                    "_start": {
+                        "kind": "start",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "go": {
                         "kind": "python",
                         "ref": ".impl:run",
@@ -485,7 +534,9 @@ def typed_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [],
+                "edges": [
+                    {"from_node": "_start", "from_exit": "out", "to_node": "go"}
+                ],
             }
         ),
         encoding="utf-8",

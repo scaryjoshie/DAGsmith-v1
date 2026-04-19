@@ -1,8 +1,13 @@
 {
   "id": "hello",
-  "input": "examples.minimal.hello.types.records.Greeting",
-  "entry_node": "greet",
   "nodes": {
+    "_start": {
+      "kind": "start",
+      "input": "examples.minimal.hello.types.records.Greeting",
+      "exits": {
+        "out": "examples.minimal.hello.types.records.Greeting"
+      }
+    },
     "greet": {
       "kind": "python",
       "ref": ".greet:process",
@@ -14,12 +19,22 @@
       }
     }
   },
-  "edges": [],
+  "edges": [
+    {
+      "from_node": "_start",
+      "from_exit": "out",
+      "to_node": "greet"
+    }
+  ],
   "layout": {
     "nodes": {
+      "_start": {
+        "x": 80.0,
+        "y": -320.0
+      },
       "greet": {
-        "x": 240.0,
-        "y": -80.0
+        "x": 80.0,
+        "y": -224.0
       }
     }
   }

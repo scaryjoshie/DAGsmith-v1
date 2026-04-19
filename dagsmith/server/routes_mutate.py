@@ -127,7 +127,7 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
 
         ref_value = request.ref.strip() or f".{request.name}:process"
         node_entry: dict[str, Any] = {
-            "kind": "python",
+            "kind": request.kind,
             "ref": ref_value,
             "input": request.input_type,
             "exits": dict(request.exits),
@@ -162,12 +162,15 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                 status_code=404,
                 detail=f"node {node_name!r} not found in flow {flow_id!r}",
             )
-        if data.get("entry_node") == node_name:
+        # SPEC §12 line 427: start nodes are structural sentinels, not user
+        # content. Deletion is a 400, not a permissive-posture diagnostic.
+        entry = nodes[node_name]
+        if isinstance(entry, dict) and entry.get("kind") == "start":
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"cannot delete node {node_name!r}: it is the entry_node of "
-                    f"flow {flow_id!r}"
+                    f"cannot delete node {node_name!r}: it is the start "
+                    f"sentinel of flow {flow_id!r}"
                 ),
             )
 
@@ -306,7 +309,6 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
             dirty = True
 
         # Apply rename — must come last so ref/input patches use the original key.
-        effective_name = node_name
         if request.new_name is not None:
             new_name = request.new_name.strip()
             if not new_name:
@@ -316,6 +318,13 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     status_code=400,
                     detail=f"invalid node name {new_name!r}: must be a valid Python identifier (letters, digits, underscores; no spaces or special characters)",
                 )
+            # SPEC §12 line 427: renaming the start sentinel is a structural
+            # operation we don't support via the inspector. Reject.
+            if node_entry.get("kind") == "start":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"cannot rename node {node_name!r}: it is the start sentinel",
+                )
             if new_name != node_name:
                 if new_name in nodes:
                     raise HTTPException(
@@ -324,10 +333,6 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     )
                 nodes[new_name] = nodes.pop(node_name)
                 data["nodes"] = nodes
-                effective_name = new_name
-
-                if data.get("entry_node") == node_name:
-                    data["entry_node"] = new_name
 
                 edges = data.get("edges")
                 if isinstance(edges, list):

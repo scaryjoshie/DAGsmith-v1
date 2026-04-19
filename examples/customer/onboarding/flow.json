@@ -1,15 +1,21 @@
 {
   "id": "onboarding",
   "description": "Validate, enrich, score, and classify a raw customer record.",
-  "input": "examples.customer.onboarding.types.records.RawCustomer",
-  "entry_node": "normalize",
   "nodes": {
+    "_start": {
+      "kind": "start",
+      "input": "examples.customer.onboarding.types.records.RawCustomer",
+      "exits": {
+        "out": "examples.customer.onboarding.types.records.RawCustomer"
+      }
+    },
     "normalize": {
       "kind": "python",
       "ref": ".normalize:process",
       "input": "examples.customer.onboarding.types.records.RawCustomer",
       "exits": {
-        "out": "examples.customer.onboarding.types.records.NormalizedCustomer"
+        "out": "examples.customer.onboarding.types.records.NormalizedCustomer",
+        "weed": "typing.Any"
       }
     },
     "validate_email": {
@@ -59,6 +65,11 @@
   },
   "edges": [
     {
+      "from_node": "_start",
+      "from_exit": "out",
+      "to_node": "normalize"
+    },
+    {
       "from_node": "normalize",
       "from_exit": "out",
       "to_node": "validate_email"
@@ -92,8 +103,16 @@
   "layout": {
     "nodes": {
       "validate_email": {
-        "x": 65.0,
-        "y": 111.0
+        "x": 48.0,
+        "y": 112.0
+      },
+      "normalize": {
+        "x": 368.0,
+        "y": -16.0
+      },
+      "validate_age": {
+        "x": 240.0,
+        "y": 320.0
       }
     },
     "groups": []

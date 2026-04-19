@@ -241,9 +241,12 @@ class TestSubflowResolution:
             json.dumps(
                 {
                     "id": "child",
-                    "input": "typing.Any",
-                    "entry_node": "doubler",
                     "nodes": {
+                        "_start": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
                         "doubler": {
                             "kind": "python",
                             "ref": ".impl:double",
@@ -251,7 +254,9 @@ class TestSubflowResolution:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [],
+                    "edges": [
+                        {"from_node": "_start", "from_exit": "out", "to_node": "doubler"}
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -264,9 +269,12 @@ class TestSubflowResolution:
             json.dumps(
                 {
                     "id": "parent",
-                    "input": "typing.Any",
-                    "entry_node": "call_child",
                     "nodes": {
+                        "_start": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
                         "call_child": {
                             "kind": "flow",
                             "ref": "child",
@@ -274,7 +282,9 @@ class TestSubflowResolution:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [],
+                    "edges": [
+                        {"from_node": "_start", "from_exit": "out", "to_node": "call_child"}
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -326,12 +336,15 @@ class TestWorkspaceDiagnosticsField:
 class TestPermissiveShapeDiagnostics:
     """SPEC §6.4 gaps (1) and (2): shape-level problems load as diagnostics."""
 
-    def test_missing_entry_node_emits_diagnostic_without_raising(
+    def test_start_edge_to_missing_node_emits_dangling_diagnostic(
         self, tmp_path, make_workspace, passthrough_node
     ):
+        """The conftest helper wires _start → entry_node; if `entry_node`
+        names a non-existent node, the edge is dangling → dangling_edge_target
+        diagnostic."""
         mod = make_workspace(
             tmp_path,
-            "ws_missing_entry",
+            "ws_dangling_start_edge",
             flows={
                 "f": {
                     "nodes": {"leaf": passthrough_node()},
@@ -342,14 +355,11 @@ class TestPermissiveShapeDiagnostics:
         )
         diags = mod._workspace.diagnostics
         codes = [d.code for d in diags]
-        assert "missing_entry_node" in codes
-        d = next(x for x in diags if x.code == "missing_entry_node")
-        assert d.flow_id == "f"
-        assert d.detail["entry_node"] == "ghost"
+        assert "dangling_edge_target" in codes
         # workspace still loads; flow is listed
         assert "f" in mod._workspace.flow_ids
-        # strict run: invoking the flow raises with typed error
-        with pytest.raises(WorkspaceError, match="entry_node 'ghost' is not declared"):
+        # strict run: invoking the flow raises when the edge is followed
+        with pytest.raises(WorkspaceError, match="edge target 'ghost' not declared"):
             mod._workspace.flow("f")(None)
 
     def test_plain_return_node_routes_through_implicit_out(
@@ -573,9 +583,12 @@ class TestInferPublicExits:
             json.dumps(
                 {
                     "id": "f",
-                    "input": "typing.Any",
-                    "entry_node": "only",
                     "nodes": {
+                        "_start": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
                         "only": {
                             "kind": "python",
                             "ref": ".impl:echo",
@@ -583,7 +596,9 @@ class TestInferPublicExits:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [],
+                    "edges": [
+                        {"from_node": "_start", "from_exit": "out", "to_node": "only"}
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -892,9 +907,12 @@ class TestTolerantLoad:
             json.dumps(
                 {
                     "id": "good",
-                    "input": "typing.Any",
-                    "entry_node": "t",
                     "nodes": {
+                        "_start": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
                         "t": {
                             "kind": "python",
                             "ref": ".impl:triple",
@@ -902,7 +920,9 @@ class TestTolerantLoad:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [],
+                    "edges": [
+                        {"from_node": "_start", "from_exit": "out", "to_node": "t"}
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -917,7 +937,8 @@ class TestTolerantLoad:
         # flow_spec on broken raises, flow_spec on good returns spec
         with pytest.raises(WorkspaceError):
             mod._workspace.flow_spec("broken")
-        assert mod._workspace.flow_spec("good").entry_node == "t"
+        # entry_node is computed from the start sentinel (SPEC §12 line 427).
+        assert mod._workspace.flow_spec("good").entry_node == "_start"
 
 
 class TestTypeMismatchDiagnostics:
@@ -984,7 +1005,9 @@ class TestTypeMismatchDiagnostics:
         assert len(mismatches) == 1
         d = mismatches[0]
         assert d.severity == "warning"
-        assert d.edge_index == 0
+        # conftest prepended the _start → a edge at index 0; the a→b edge is
+        # the second in the edges list.
+        assert d.edge_index == 1
         assert d.node_id == "a"
         assert d.detail["source_type"] == "mymod.TypeA"
         assert d.detail["target_type"] == "mymod.TypeB"
@@ -1019,3 +1042,171 @@ class TestTypeMismatchDiagnostics:
         )
         mismatches = [d for d in mod._workspace.diagnostics if d.code == "type_mismatch"]
         assert mismatches == [], "typing.Any source should never produce type_mismatch"
+
+
+class TestStartNode:
+    """SPEC §12 line 427: kind="start" is a virtual entry sentinel. Exactly
+    one per flow; the runtime passes the input payload straight through its
+    implicit "out" exit without ref resolution."""
+
+    def test_start_node_routes_through_out(self, tmp_path):
+        pkg_name = "ws_start_routes"
+        pkg_root = tmp_path / pkg_name
+        pkg_root.mkdir()
+        (pkg_root / "dagsmith.json").write_text(
+            json.dumps({"name": pkg_name, "version": "0.1.0"}), encoding="utf-8"
+        )
+        (pkg_root / "__init__.py").write_text(
+            "from dagsmith import load_workspace\n"
+            "_workspace = load_workspace(__name__)\n",
+            encoding="utf-8",
+        )
+        flow_dir = pkg_root / "f"
+        flow_dir.mkdir()
+        (flow_dir / "__init__.py").write_text("", encoding="utf-8")
+        (flow_dir / "impl.py").write_text(
+            "def bump(x):\n    return x + 1\n", encoding="utf-8"
+        )
+        (flow_dir / "flow.json").write_text(
+            json.dumps(
+                {
+                    "id": "f",
+                    "nodes": {
+                        "_start": {
+                            "kind": "start",
+                            "input": "int",
+                            "exits": {"out": "int"},
+                        },
+                        "bump": {
+                            "kind": "python",
+                            "ref": ".impl:bump",
+                            "input": "int",
+                            "exits": {"out": "int"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "_start", "from_exit": "out", "to_node": "bump"}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sys.path.insert(0, str(tmp_path))
+        try:
+            for m in list(sys.modules):
+                if m == pkg_name or m.startswith(pkg_name + "."):
+                    del sys.modules[m]
+            module = importlib.import_module(pkg_name)
+        finally:
+            if str(tmp_path) in sys.path:
+                sys.path.remove(str(tmp_path))
+        # entry_node is computed to the start id; input_type is computed to
+        # start.exits["out"].
+        spec = module._workspace.flow_spec("f")
+        assert spec.entry_node == "_start"
+        assert spec.input_type == "int"
+        # runtime: start passes the payload unchanged through "out".
+        result = module._workspace.flow("f")(10)
+        assert result.value == 11  # bump(10)
+
+    def test_missing_start_node_emits_diagnostic(
+        self, tmp_path, make_workspace, passthrough_node
+    ):
+        # make_workspace's helper auto-adds a start; bypass it by writing a
+        # flow.json directly without a start node.
+        pkg_name = "ws_no_start"
+        pkg_root = tmp_path / pkg_name
+        pkg_root.mkdir()
+        (pkg_root / "dagsmith.json").write_text(
+            json.dumps({"name": pkg_name, "version": "0.1.0"}), encoding="utf-8"
+        )
+        (pkg_root / "__init__.py").write_text(
+            "from dagsmith import load_workspace\n"
+            "_workspace = load_workspace(__name__)\n",
+            encoding="utf-8",
+        )
+        flow_dir = pkg_root / "f"
+        flow_dir.mkdir()
+        (flow_dir / "__init__.py").write_text("", encoding="utf-8")
+        (flow_dir / "flow.json").write_text(
+            json.dumps(
+                {
+                    "id": "f",
+                    "nodes": {
+                        "leaf": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                    },
+                    "edges": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sys.path.insert(0, str(tmp_path))
+        try:
+            for m in list(sys.modules):
+                if m == pkg_name or m.startswith(pkg_name + "."):
+                    del sys.modules[m]
+            module = importlib.import_module(pkg_name)
+        finally:
+            if str(tmp_path) in sys.path:
+                sys.path.remove(str(tmp_path))
+        codes = [d.code for d in module._workspace.diagnostics]
+        assert "missing_start_node" in codes
+        # invoking raises (no unique start node).
+        import pytest as _pt
+        with _pt.raises(WorkspaceError, match="no unique start node"):
+            module._workspace.flow("f")(None)
+
+    def test_ambiguous_start_node_emits_diagnostic(self, tmp_path):
+        pkg_name = "ws_two_starts"
+        pkg_root = tmp_path / pkg_name
+        pkg_root.mkdir()
+        (pkg_root / "dagsmith.json").write_text(
+            json.dumps({"name": pkg_name, "version": "0.1.0"}), encoding="utf-8"
+        )
+        (pkg_root / "__init__.py").write_text(
+            "from dagsmith import load_workspace\n"
+            "_workspace = load_workspace(__name__)\n",
+            encoding="utf-8",
+        )
+        flow_dir = pkg_root / "f"
+        flow_dir.mkdir()
+        (flow_dir / "__init__.py").write_text("", encoding="utf-8")
+        (flow_dir / "flow.json").write_text(
+            json.dumps(
+                {
+                    "id": "f",
+                    "nodes": {
+                        "_start_a": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                        "_start_b": {
+                            "kind": "start",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                    },
+                    "edges": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sys.path.insert(0, str(tmp_path))
+        try:
+            for m in list(sys.modules):
+                if m == pkg_name or m.startswith(pkg_name + "."):
+                    del sys.modules[m]
+            module = importlib.import_module(pkg_name)
+        finally:
+            if str(tmp_path) in sys.path:
+                sys.path.remove(str(tmp_path))
+        diags = module._workspace.diagnostics
+        hits = [d for d in diags if d.code == "ambiguous_start_node"]
+        assert len(hits) == 1
+        assert sorted(hits[0].detail["start_nodes"]) == ["_start_a", "_start_b"]

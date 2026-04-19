@@ -267,12 +267,13 @@ class TestDeleteNode:
         )
         assert resp.status_code == 404
 
-    def test_delete_entry_node_is_400(
+    def test_delete_start_node_is_400(
         self, client: TestClient, server_pkg: str
     ) -> None:
-        # `greet` is the entry_node of the hello flow — deletion must fail.
+        """SPEC §12 line 427: the start sentinel is structural, not user
+        content; deletion is refused."""
         resp = client.delete(
-            f"/api/workspaces/{server_pkg}/flows/hello/nodes/greet"
+            f"/api/workspaces/{server_pkg}/flows/hello/nodes/_start"
         )
         assert resp.status_code == 400
 
@@ -641,7 +642,7 @@ class TestMutationResponseDiagnostics:
 class TestUpdateNode:
     """PATCH /api/workspaces/{w}/flows/{fid}/nodes/{node} — 5 editing paths."""
 
-    def test_rename_node_cascades_to_edges_and_entry(
+    def test_rename_node_cascades_to_edges(
         self, client: TestClient, server_pkg: str
     ) -> None:
         resp = client.patch(
@@ -652,12 +653,18 @@ class TestUpdateNode:
         body = resp.json()
         assert "welcome" in body["nodes"]
         assert "greet" not in body["nodes"]
-        assert body["entry_node"] == "welcome"
-        # original edge from_node must be updated
-        edge = next(
+        # entry_node is the computed start sentinel id (SPEC §12 line 427),
+        # unaffected by renaming compute nodes.
+        assert body["entry_node"] == "_start"
+        # edges referencing the renamed node cascade: from_node + to_node
+        from_edge = next(
             (e for e in body["edges"] if e.get("from_node") == "welcome"), None
         )
-        assert edge is not None, "edge from_node should cascade to 'welcome'"
+        to_edge = next(
+            (e for e in body["edges"] if e.get("to_node") == "welcome"), None
+        )
+        assert from_edge is not None, "edge from_node should cascade to 'welcome'"
+        assert to_edge is not None, "edge to_node should cascade to 'welcome'"
 
     def test_update_ref_changes_ref_field(
         self, client: TestClient, server_pkg: str

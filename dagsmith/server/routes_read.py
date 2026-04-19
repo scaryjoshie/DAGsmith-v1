@@ -30,10 +30,14 @@ def build_flow_view(ws: Workspace, flow_id: str) -> FlowView:
 
     nodes: dict[str, NodeView] = {}
     for node_name, node_spec in spec.nodes.items():
-        func = ws.node_callable(flow_id, node_name)
-        source_code, source_path = read_source(
-            func, node_spec.ref, flow_id, ws.package_name, ws.root
-        )
+        # Start nodes (SPEC §12 line 427) have no callable and no source.
+        if node_spec.kind == "start":
+            source_code, source_path = None, None
+        else:
+            func = ws.node_callable(flow_id, node_name)
+            source_code, source_path = read_source(
+                func, node_spec.ref, flow_id, ws.package_name, ws.root
+            )
         nodes[node_name] = NodeView(
             name=node_name,
             kind=node_spec.kind,
