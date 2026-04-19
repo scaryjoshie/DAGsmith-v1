@@ -62,6 +62,7 @@ Backend accepts any shape, emits diagnostics. Runtime raises at the point of vio
 - Frontend: `cd frontend && npm run dev` (port 5173)
 - Tests: `uv run pytest -q` from repo root
 - Visual verify: `playwright-cli open --browser=chromium http://localhost:5173/?workspace=examples.customer` + `screenshot`
+- **Ad-hoc screenshots**: save to `/screenshots/` (gitignored) or leave as playwright-cli's default under `.playwright-cli/`. Never drop PNGs at the repo root.
 
 ## Spec
 
