@@ -201,7 +201,6 @@ function FlowGraphInner({
     (draggedId: string, dragged: { x: number; y: number }, pool: WorkflowNodeType[]): string | null => {
       for (const candidate of pool) {
         if (candidate.id === draggedId) continue;
-        if (candidate.id.startsWith('exit:')) continue;
         // Snap eligibility: source must have 0 or 1 exit. 0-exit nodes use the
         // implicit "out" handle (SPEC §5); 1-exit nodes use their declared
         // exit. Multi-exit nodes can't be snap sources since the chain's
@@ -237,8 +236,6 @@ function FlowGraphInner({
           if (change.type !== 'position' || !change.position) continue;
 
           if (change.dragging) {
-            if (change.id.startsWith('exit:')) continue;
-
             // On drag start (first dragging=true event), collect the chain below.
             if (dragStartPosRef.current === null) {
               dragStartPosRef.current = change.position;
@@ -260,7 +257,7 @@ function FlowGraphInner({
                 const boundEdge = flow.edges.find(
                   (e) => e.from_node === parentId && e.from_exit === exitName,
                 );
-                if (!boundEdge?.to_node) continue;
+                if (!boundEdge) continue;
                 const childId = boundEdge.to_node;
                 if (visited.has(childId)) continue;
                 const child = byId.get(childId);
@@ -333,9 +330,7 @@ function FlowGraphInner({
                   targetHandle: 'in',
                 });
               }
-              if (!change.id.startsWith('exit:')) {
-                onNodePositionChange(change.id, snappedX, snappedY);
-              }
+              onNodePositionChange(change.id, snappedX, snappedY);
               // Reposition chain members flush below their parents using exact heights,
               // update next so React state is immediately correct (not waiting for refetch),
               // and save positions to backend. Walk in insertion order (parent before child).
@@ -357,9 +352,7 @@ function FlowGraphInner({
             }
           }
 
-          if (!change.id.startsWith('exit:')) {
-            onNodePositionChange(change.id, change.position.x, change.position.y);
-          }
+          onNodePositionChange(change.id, change.position.x, change.position.y);
           // Reposition chain members flush below their parents, update next, and save.
           if (chainParents.size > 0) {
             const byId = new Map(next.map((n) => [n.id, n]));
@@ -404,7 +397,6 @@ function FlowGraphInner({
   const handleNodesDelete = useCallback(
     (removed: WorkflowNodeType[]) => {
       for (const node of removed) {
-        if (node.id.startsWith('exit:')) continue;
         onDeleteNode(node.id);
       }
     },
@@ -413,10 +405,9 @@ function FlowGraphInner({
 
   const handleBeforeDelete = useCallback(
     async ({ nodes: nodesToDelete }: { nodes: WorkflowNodeType[]; edges: Edge[] }) => {
-      const realNodes = nodesToDelete.filter((n) => !n.id.startsWith('exit:'));
-      if (realNodes.length === 0) return true;
-      const names = realNodes.map((n) => n.id).join(', ');
-      const label = realNodes.length === 1
+      if (nodesToDelete.length === 0) return true;
+      const names = nodesToDelete.map((n) => n.id).join(', ');
+      const label = nodesToDelete.length === 1
         ? `Delete node '${names}' and its edges?`
         : `Delete nodes ${names} and their edges?`;
       return window.confirm(label);
@@ -480,7 +471,6 @@ function FlowGraphInner({
         if (i === j) continue;
         const top = nodes[i];
         const bot = nodes[j];
-        if (top.id.startsWith('exit:') || bot.id.startsWith('exit:')) continue;
         const h = top.measured?.height ?? FALLBACK_NODE_HEIGHT;
         const dy = Math.abs(bot.position.y - (top.position.y + h));
         const dx = Math.abs(bot.position.x - top.position.x);
@@ -502,7 +492,7 @@ function FlowGraphInner({
           ...n.data,
           snapTarget: n.id === snapTargetId,
           exitOrder: layoutExits?.[n.id],
-          onExitsReorder: n.id.startsWith('exit:') ? undefined : (newOrder: string[]) => onExitsReorder(n.id, newOrder),
+          onExitsReorder: (newOrder: string[]) => onExitsReorder(n.id, newOrder),
           severity: nodeSeverity.get(n.id) ?? null,
           fanOutCounts: fanOutMap.get(n.id),
           snappedAbove: stackFlags.above.has(n.id),
@@ -582,11 +572,7 @@ function FlowGraphInner({
             }}
             onNodeClick={(_, node) => {
               setSelectedEdgeId(null);
-              if (node.id.startsWith('exit:')) {
-                onSelectNode(null);
-              } else {
-                onSelectNode(node.id);
-              }
+              onSelectNode(node.id);
             }}
             onPaneClick={() => {
               setSelectedEdgeId(null);
@@ -617,7 +603,7 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
       const current = queue.shift()!;
       const level = levels.get(current)!;
       for (const edge of flow.edges) {
-        if (edge.from_node === current && edge.to_node && !levels.has(edge.to_node)) {
+        if (edge.from_node === current && !levels.has(edge.to_node)) {
           levels.set(edge.to_node, level + 1);
           queue.push(edge.to_node);
         }
@@ -627,9 +613,6 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
   for (const id of Object.keys(flow.nodes)) {
     if (!levels.has(id)) levels.set(id, 0);
   }
-
-  const maxLevel = Math.max(0, ...Array.from(levels.values()));
-  const terminalLevel = maxLevel + 1;
 
   const levelGroups: Record<number, string[]> = {};
   for (const [id, level] of levels) {
@@ -661,22 +644,11 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
     });
   }
 
-  const exitIds = Object.keys(flow.public_exits);
-  exitIds.forEach((exitId, idx) => {
-    const offset = (idx - (exitIds.length - 1) / 2) * X_SPACING;
-    nodes.push({
-      id: `exit:${exitId}`,
-      type: 'workflow',
-      position: { x: X_CENTER + offset, y: terminalLevel * Y_SPACING },
-      data: { label: exitId, variant: 'terminal' },
-    });
-  });
-
   const edges: Edge[] = flow.edges.map((edge, idx) => ({
     id: `e${idx}`,
     source: edge.from_node,
     sourceHandle: edge.from_exit,
-    target: edge.to_node ?? `exit:${edge.to_flow_exit!}`,
+    target: edge.to_node,
     targetHandle: 'in',
     type: 'selectable',
     data: { fromNode: edge.from_node, fromExit: edge.from_exit },

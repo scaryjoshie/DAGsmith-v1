@@ -25,8 +25,7 @@ export interface NodeView {
 export interface EdgeView {
   from_node: string;
   from_exit: string;
-  to_node: string | null;
-  to_flow_exit: string | null;
+  to_node: string;
 }
 
 export interface NodeLayoutPosition {
@@ -59,7 +58,6 @@ export interface FlowView {
   description: string;
   nodes: Record<string, NodeView>;
   edges: EdgeView[];
-  public_exits: Record<string, string>;
   layout: FlowLayout;
   diagnostics: DiagnosticView[];
 }
@@ -88,8 +86,7 @@ export interface AddNodePayload {
 export interface AddEdgePayload {
   from_node: string;
   from_exit: string;
-  to_node: string | null;
-  to_flow_exit: string | null;
+  to_node: string;
 }
 
 export type LayoutPositions = Record<string, { x: number; y: number }>;

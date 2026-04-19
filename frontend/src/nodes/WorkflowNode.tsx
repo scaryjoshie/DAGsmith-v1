@@ -6,7 +6,6 @@ export type WorkflowNodeData = {
   icon?: ReactNode;
   iconBg?: string;
   iconColor?: string;
-  variant?: 'process' | 'terminal';
   exits?: string[];
   exitOrder?: string[];
   onExitsReorder?: (newOrder: string[]) => void;
@@ -25,9 +24,6 @@ export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
 const PROCESS_BASE =
   'wf-process group relative flex min-w-[260px] flex-col rounded-xs border border-line-2 bg-surface-1 font-mono tracking-[-0.01em] text-ink-0 transition-[border-color] duration-100 ease-[ease] hover:border-ink-2 hover:bg-surface-2';
 
-const TERMINAL_BASE =
-  'wf-terminal group flex min-w-[84px] items-center justify-center gap-2 rounded-xs border border-dashed border-line-1 bg-surface-0 px-[18px] py-[7px] font-mono text-sm font-normal tracking-[0.01em] text-ink-2 transition-[border-color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-1';
-
 const HANDLE_BASE =
   '!h-[7px] !w-[7px] !rounded-none !border !border-[var(--fg-2)] !bg-[var(--fg-2)] !opacity-0 transition-opacity duration-150 ease-[ease] group-hover:!opacity-100 hover:!bg-[var(--fg-0)] hover:!border-[var(--fg-0)]';
 
@@ -39,25 +35,6 @@ const SWITCHER_HANDLE_BASE =
 export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
   const connection = useConnection();
   const isConnecting = !!connection.fromNode;
-  const isTerminal = data.variant === 'terminal';
-
-  if (isTerminal) {
-    const handleClass = isConnecting ? `${HANDLE_BASE} ${HANDLE_VISIBLE_EXTRA}` : HANDLE_BASE;
-    return (
-      <div className={TERMINAL_BASE}>
-        <Handle type="target" position={Position.Top} id="in" className={handleClass} />
-        {data.icon && (
-          <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center text-ink-2"
-            style={{ background: data.iconBg, color: data.iconColor }}
-          >
-            {data.icon}
-          </span>
-        )}
-        <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{data.label}</span>
-      </div>
-    );
-  }
 
   const rawExits = data.exits ?? [];
   const exits = data.exitOrder

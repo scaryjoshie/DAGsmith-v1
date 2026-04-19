@@ -60,13 +60,11 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
   const handleConnect = useCallback(async (connection: Connection) => {
     if (!flow || !connection.source || !connection.target) return;
     const fromExit = connection.sourceHandle ?? 'out';
-    const isExitTarget = connection.target.startsWith('exit:');
     try {
       setFlow(await addEdge(workspaceName, flowId, {
         from_node: connection.source,
         from_exit: fromExit,
-        to_node: isExitTarget ? null : connection.target,
-        to_flow_exit: isExitTarget ? connection.target.slice('exit:'.length) : null,
+        to_node: connection.target,
       }));
     } catch (e) {
       showToast((e as Error).message);
@@ -97,12 +95,10 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
     if (!flow || !newConnection.source || !newConnection.target) return;
     try {
       await deleteEdge(workspaceName, flowId, fromNode, fromExit);
-      const isExitTarget = newConnection.target.startsWith('exit:');
       setFlow(await addEdge(workspaceName, flowId, {
         from_node: newConnection.source,
         from_exit: newConnection.sourceHandle ?? 'out',
-        to_node: isExitTarget ? null : newConnection.target,
-        to_flow_exit: isExitTarget ? newConnection.target.slice('exit:'.length) : null,
+        to_node: newConnection.target,
       }));
     } catch (e) {
       showToast((e as Error).message);
