@@ -164,6 +164,29 @@ Ported all 14 frontend components from CSS Modules to Tailwind CSS v4 utilities 
 
 **Prune pass** (`30df82a`): removed `mockup/` (throwaway SPEC-drafting tree, per its own README), four superseded `docs/*.md` files (`UI_FEATURES.md`, `UX_REDESIGN.md`, `UX_REDESIGN_visual.md` explicitly self-labeled "Historical"; `AUDIT_2026-04.md` a point-in-time snapshot). Dropped `.gitignore`'s blanket `*.png` rule in favor of a scoped `/screenshots/` convention so legitimate PNG assets (favicons, illustrations) can be tracked (`a9a2d78`).
 
+### Infer model + leaf cue (Phase 2)
+
+> *"All of this stuff is just examples to draft and visualize while we're developing this live. And so there's no need for you to think about backwards compatibility."*
+
+Explicit terminal nodes and the stored `public_exits` dict were removed in favor of the **Infer model** (SPEC §12 line 425): any source handle with no outgoing edge is a public exit of the flow. The field is derived, not stored.
+
+- `a5102b6` — backend IR + runtime + tests + examples, folded into one commit because the IR and runtime changes are inseparable (dropping `EdgeSpec.to_flow_exit` breaks the old "terminate when edge targets a public exit" runtime path, and the test suite uses `examples/minimal/hello` end-to-end). One combined commit was safer than a deliberately-broken intermediate state.
+  - `dagsmith/model.py`: `EdgeSpec.to_node: str` required; `to_flow_exit` gone; `FlowSpec.public_exits` gone.
+  - `dagsmith/workspace.py`: new `_derive_public_exits` scans unconnected handles, merges by name, emits `merged_exit_type_mismatch` (new warning code) when contributors disagree on type (collapses to `typing.Any`). `_run` now terminates on unmatched exits — the exit name IS the public exit name. `Workspace.public_exits(flow_id)` accessor exposes the derived map.
+  - `dagsmith/runtime.py::_resolve_node_result`: single-exit nodes route plain returns through that exit's declared name (was `DEFAULT_EXIT_NAME`). Necessary so the inferred public exit name matches what the node declares.
+  - Diagnostic rename: `empty_public_exits` → `no_public_exits` (emitted when every handle is connected).
+  - Server: `EdgeView.to_flow_exit` + `AddEdgeRequest.to_flow_exit` gone; `FlowView.public_exits` populated from the derived map.
+  - Examples: both `examples/minimal/hello/flow.json` and `examples/customer/onboarding/flow.json` rewritten in-place. Customer's `validate_email.invalid` and `validate_age.invalid` merge-by-name into a single `invalid` public exit (matching types, no warning).
+  - Tests: 108 → 118 passing (new coverage: `test_derive_public_exits_from_unconnected_handles`, `test_derive_public_exits_merges_by_name`, `test_merged_exit_type_mismatch_warns`, `test_runtime_terminates_at_inferred_public_exit`, `test_legacy_to_flow_exit_rejected`, `test_stored_public_exits_field_stripped`, plus rewrites).
+
+- `6039b22` — frontend dead-branch cleanup: removed all 11 `startsWith('exit:')` guards in `FlowGraph.tsx` (snap candidate, drag dispatch, chain walk, position save, delete filter, click branch, stackFlags), removed the synthetic `exit:*` node synthesis in `layoutFlow`, removed the `variant: 'terminal'` branch and `TERMINAL_BASE` constant in `WorkflowNode.tsx`, removed the `.wf-terminal` selection rule. Net delta −78/+15.
+
+- `bb3d848` — chevron leaf cue. Under-handle ▾ glyph on every inferred public exit. New `leafMap` memo in `FlowGraph.tsx` feeds `leafExits: Set<string>` to each node; `WorkflowNode.tsx` renders `LeafChevron` as a **sibling** of `<Handle>` (not a child) because Handle's `!opacity-0` base state would otherwise inherit onto the chevron. Suppressed on flush-stacked single-exit tops (the follower is the effective downstream). Verified on both example workspaces.
+
+**Merge-by-name semantics.** The Infer model has to answer "what if two leaves share an exit name?" — the chosen answer is: they share the public exit. This matches the common multi-validation case (`validate_email.invalid` + `validate_age.invalid` both feed the same `invalid` flow exit). Type agreement is required for a clean merge; mismatched types surface as a warning-level diagnostic rather than a hard error, since the runtime does not actually type-check values at public exits today.
+
+**Chevron rationale.** With terminal nodes gone, a leaf handle and a not-yet-connected handle look identical — both are "unconnected source." The ▾ glyph reads universally as "flow exits here" and doesn't fight any existing border/color treatment (severity, selection, snap target, fan-out). Text-ink-2 so it's subtle; `pointer-events-none` so it doesn't steal hover.
+
 ---
 
 ## Design decisions

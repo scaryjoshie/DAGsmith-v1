@@ -241,10 +241,6 @@ A flow file contains both **semantic graph data** (what the runner needs) and **
   "id": "customer_validation",
   "description": "Validate and enrich customer records.",
   "input": "RawCustomer",
-  "public_exits": {
-    "valid": "EnrichedCustomer",
-    "invalid": "ValidationError"
-  },
   "entry_node": "load",
   "nodes": {
     "load": {
@@ -279,9 +275,7 @@ A flow file contains both **semantic graph data** (what the runner needs) and **
   },
   "edges": [
     { "from_node": "load", "from_exit": "out", "to_node": "validate_email" },
-    { "from_node": "validate_email", "from_exit": "valid", "to_node": "enrich" },
-    { "from_node": "validate_email", "from_exit": "invalid", "to_flow_exit": "invalid" },
-    { "from_node": "enrich", "from_exit": "out", "to_flow_exit": "valid" }
+    { "from_node": "validate_email", "from_exit": "valid", "to_node": "enrich" }
   ],
   "layout": {
     "nodes": {
@@ -294,7 +288,9 @@ A flow file contains both **semantic graph data** (what the runner needs) and **
 }
 ```
 
-The `layout` key is **opaque to the runner** — it just passes through. React Flow reads/writes it. The runner only cares about `id`, `input`, `public_exits`, `entry_node`, `nodes`, and `edges`.
+Under the **Infer model** (SPEC §12 line 425), public exits are derived from unconnected source handles: `validate_email.invalid` and `enrich.out` are left without outgoing edges, so they become the flow's public exits `invalid: ValidationError` and `out: EnrichedCustomer` automatically.
+
+The `layout` key is **opaque to the runner** — it just passes through. React Flow reads/writes it. The runner only cares about `id`, `input`, `entry_node`, `nodes`, and `edges`; public exits are derived.
 
 ---
 

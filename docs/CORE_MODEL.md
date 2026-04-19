@@ -528,9 +528,6 @@ Example:
   },
   "edges": [],
   "entry_node": "load",
-  "public_exits": {
-    "out": "Customer"
-  },
   "layout": {
     "nodes": {
       "load": { "x": 120, "y": 80 }
@@ -958,8 +955,7 @@ class NodeSpec:
 class EdgeSpec:
     from_node: str
     from_exit: str = "out"
-    to_node: str | None = None
-    to_flow_exit: str | None = None
+    to_node: str        # required — edges always target a node
 
 class FlowSpec:
     id: str
@@ -967,8 +963,9 @@ class FlowSpec:
     nodes: dict[str, NodeSpec]
     edges: list[EdgeSpec]
     entry_node: str
-    public_exits: dict[str, ExitSpec]
     description: str = ""
+    # public_exits is NOT stored — it's derived at load time from
+    # unconnected source handles (Infer model, §12 line 425).
 ```
 
 This is enough to support:

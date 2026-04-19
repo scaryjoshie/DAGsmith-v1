@@ -12,7 +12,7 @@ Nodes are the topology primitives. They appear as boxes in the graph, connected 
 
 The standard compute node. `ref` points to a Python callable using `module:attribute` syntax — either absolute (`mypackage.utils:transform`) or workspace-relative (`.normalize:run`). The function receives the incoming value and returns a dict keyed by exit name.
 
-Unconnected exit ports on a Python node are inferred as public exits of the flow (the "Infer" model — no explicit `public_exits` declaration needed; just leave the port unwired and it becomes a flow output).
+Unconnected exit ports on a Python node are inferred as public exits of the flow (the "Infer" model, shipped in Phase 2 — see SPEC §12 line 425 and commits `a5102b6`/`6039b22`/`bb3d848`). No explicit `public_exits` declaration is needed; just leave the port unwired and it becomes a flow output. Two leaves with the same exit name merge into one public exit (merge-by-name); divergent types downgrade to `typing.Any` with a `merged_exit_type_mismatch` warning. The UI renders a ▾ chevron under each leaf handle as a visual cue.
 
 ### Subflow (`kind: "flow"`)
 

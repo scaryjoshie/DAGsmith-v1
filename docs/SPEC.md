@@ -85,7 +85,7 @@ No new IR field. Fan-out is simply "more than one edge with the same `(from_node
 - Loader resolves `ref` as a flow ID (dot-joined path), looks up the target flow.
 - Missing ref → diagnostic; the node remains in the spec but is marked `unresolved`. Running through it raises `UnresolvedFlowRef`.
 - Cross-flow cycles: detected by DFS at load time, emitted as a diagnostic on every node participating in the cycle. Running a cycle raises at the second visit.
-- Subflow's `public_exits` vs parent node's `exits`: mismatches (missing exit name, incompatible `type_ref`) emit diagnostics on the parent node. Runtime raises on exit selection if the reached exit isn't declared on the parent.
+- Subflow's inferred public exits vs parent node's `exits`: mismatches (missing exit name, incompatible `type_ref`) emit diagnostics on the parent node. Runtime raises on exit selection if the reached exit isn't declared on the parent. (Public exits are derived from the subflow's unconnected handles under the Infer model — §12 line 425.)
 
 ### 4.5 Group grouping (UI-only, stored in layout)
 
@@ -152,9 +152,10 @@ Implementation replaces today's single-next linear walk in `runtime.py` with a w
 3. Run the node; record `visited[node] = result`.
 4. Resolve exit (plain → `out`; selector → exit; `emit(...)` → exit; `AmbiguousRoute` if multi-exit plain with no selector).
 5. Enqueue `(target, value)` for every edge matching `(node, exit)`. Multiple matches = fan-out.
-6. When queue empties, return the payload from the node that reached a `to_flow_exit`.
+6. When no edge matches the resolved `(node, exit)`, the source handle is a leaf — record `(exit_name, value)` as a reached public exit (Infer model, §12 line 425) and continue draining the queue.
+7. When the queue empties, return the payload from the reached public exit.
 
-If two different `to_flow_exit` targets are reached (fan-out without merge) → raise `MultiplePublicExitsReached`. Design-time diagnostic plus runtime exception.
+If two different public exit names are reached (fan-out without merge) → raise `MultiplePublicExitsReached`. Design-time diagnostic plus runtime exception. Merge-by-name: two leaves sharing an exit name collapse into a single public exit at load time; differing types emit a `merged_exit_type_mismatch` warning.
 
 Net diff vs today: ~30-40 lines. No lock, no executor, no tracer concurrency concern.
 
@@ -266,7 +267,7 @@ Selecting a node or edge shows a small floating card anchored to the selection. 
 | **Node** (python) | Label (inline-editable), input type (drag-drop target), exits list (add/rename/delete, each is a drop target), "Open source →" action (opens source as a new tab; Shift-click opens as a split). |
 | **Node** (flow-kind subflow) | Label, input type, ref to subflow ID, "Enter subflow →" (opens subflow canvas as new tab; Shift-click splits). |
 | **Edge** | Source handle, target handle, inferred carried type (if resolvable), delete. |
-| **Flow background** | "Flow contract" action → opens the flow's `input` + `public_exits` edit view as a new tab. |
+| **Flow background** | "Flow contract" action → opens the flow's `input` + inferred public exits read-out as a new tab (exits are derived from unconnected handles — §12 line 425). |
 
 Why not a sidebar: the popover stays close to what the user is editing, doesn't steal canvas width, and keeps quick edits quick. Heavy editing (source, full contract editor) is always "open as a tab," which can then be split.
 
@@ -422,7 +423,7 @@ Each of these has at least one hook already in the spec (tracer, `Diagnostic`, t
 
 ### Decisions emerging from the 2026-04 session
 
-**End nodes removed.** Explicit terminal/end nodes were removed in favor of the **Infer** model: unconnected exit ports become public exits automatically. No `public_exits` declaration needed in the common case. Simpler authoring; the graph speaks for itself.
+**End nodes removed — SHIPPED (Phase 2).** Explicit terminal/end nodes were removed in favor of the **Infer** model: unconnected exit ports become public exits automatically. No `public_exits` declaration needed — the field is derived, not stored. Edges that previously targeted a public exit via `to_flow_exit` are simply omitted; the source handle being unconnected is what marks it as a leaf. Merge-by-name: two unconnected leaves sharing an exit name collapse into a single public exit; divergent types emit a `merged_exit_type_mismatch` warning and merge to `typing.Any`. Leaf cue: a ▾ chevron rendered under each unconnected source handle. Implemented across commits `a5102b6` (backend IR + runtime + tests + examples), `6039b22` (frontend dead-branch cleanup), `bb3d848` (chevron cue).
 
 **Start node (planned).** An explicit virtual entry node (▶) for flows that need a specific input shape injected before the first Python node. Not yet implemented.
 
