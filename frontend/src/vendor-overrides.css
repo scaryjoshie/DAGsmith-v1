@@ -70,7 +70,8 @@
    * sharper selection feedback. The base-layer wrapping is load-bearing here:
    * without it, `.\!border-red` (utilities) would paint over the
    * selection-blue border on severity-flagged selected nodes. */
-  .flow-graph-canvas .react-flow__node.selected .wf-process {
+  .flow-graph-canvas .react-flow__node.selected .wf-process,
+  .flow-graph-canvas .react-flow__node.selected .wf-start {
     border-color: var(--blue) !important;
     box-shadow: 0 0 0 2px var(--blue);
   }

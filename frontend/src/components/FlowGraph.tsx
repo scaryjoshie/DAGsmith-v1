@@ -20,7 +20,11 @@ import {
 import { PythonIcon } from '../icons/BrandIcons';
 import { WorkflowNode } from '../nodes/WorkflowNode';
 import type { WorkflowNode as WorkflowNodeType } from '../nodes/WorkflowNode';
+import { StartNode } from '../nodes/StartNode';
+import type { StartNode as StartNodeType } from '../nodes/StartNode';
 import type { FlowView } from '../types';
+
+type GraphNode = WorkflowNodeType | StartNodeType;
 
 const EDGE_DELETE_BTN_CLASS =
   'pointer-events-auto flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-[2px] border border-line-2 bg-surface-1 font-mono text-[11px] leading-none text-ink-1 transition-[background,border-color,color] duration-100 ease-[ease] hover:border-red hover:bg-red hover:text-white';
@@ -28,7 +32,7 @@ const EDGE_DELETE_BTN_CLASS =
 const EDGE_ENDPOINT_HANDLE_CLASS =
   'pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 cursor-crosshair rounded-full border-[1.5px] border-surface-0 bg-blue';
 
-const nodeTypes = { workflow: WorkflowNode };
+const nodeTypes = { workflow: WorkflowNode, start: StartNode };
 
 // Context so SelectableEdge can call the delete handler without prop-drilling through edgeTypes.
 const EdgeDeleteContext = createContext<((fromNode: string, fromExit: string) => void) | null>(null);
@@ -142,7 +146,7 @@ function FlowGraphInner({
 }: FlowGraphProps) {
   const { setCenter, getNode, getViewport } = useReactFlow();
   const initial = useMemo(() => layoutFlow(flow), [flow]);
-  const [nodes, setNodes] = useState<WorkflowNodeType[]>(initial.nodes);
+  const [nodes, setNodes] = useState<GraphNode[]>(initial.nodes);
   const [edges, setEdges] = useState<Edge[]>(initial.edges);
   const [snapTargetId, setSnapTargetId] = useState<string | null>(null);
   const snapTargetRef = useRef<string | null>(null);
@@ -198,7 +202,7 @@ function FlowGraphInner({
   }, [onReady, setCenter, getNode]);
 
   const findSnapCandidate = useCallback(
-    (draggedId: string, dragged: { x: number; y: number }, pool: WorkflowNodeType[]): string | null => {
+    (draggedId: string, dragged: { x: number; y: number }, pool: GraphNode[]): string | null => {
       for (const candidate of pool) {
         if (candidate.id === draggedId) continue;
         // Snap eligibility: source must have 0 or 1 exit. 0-exit nodes use the
@@ -229,7 +233,7 @@ function FlowGraphInner({
   );
 
   const handleNodesChange = useCallback(
-    (changes: NodeChange<WorkflowNodeType>[]) => {
+    (changes: NodeChange<GraphNode>[]) => {
       setNodes((current) => {
         let next = applyNodeChanges(changes, current);
         for (const change of changes) {
@@ -395,7 +399,7 @@ function FlowGraphInner({
   );
 
   const handleNodesDelete = useCallback(
-    (removed: WorkflowNodeType[]) => {
+    (removed: GraphNode[]) => {
       for (const node of removed) {
         onDeleteNode(node.id);
       }
@@ -404,7 +408,7 @@ function FlowGraphInner({
   );
 
   const handleBeforeDelete = useCallback(
-    async ({ nodes: nodesToDelete }: { nodes: WorkflowNodeType[]; edges: Edge[] }) => {
+    async ({ nodes: nodesToDelete }: { nodes: GraphNode[]; edges: Edge[] }) => {
       if (nodesToDelete.length === 0) return true;
       const names = nodesToDelete.map((n) => n.id).join(', ');
       const label = nodesToDelete.length === 1
@@ -508,9 +512,16 @@ function FlowGraphInner({
     return { above, below, flushPairs };
   }, [nodes]);
 
-  const decoratedNodes = useMemo(
+  const decoratedNodes: GraphNode[] = useMemo(
     () =>
-      nodes.map((n) => {
+      nodes.map((n): GraphNode => {
+        // StartNode is purely structural — only snapTarget is meaningful.
+        if (n.type === 'start') {
+          return {
+            ...n,
+            data: { ...n.data, snapTarget: n.id === snapTargetId },
+          };
+        }
         const snappedAbove = stackFlags.above.has(n.id);
         const exitCount = n.data.exits?.length ?? 0;
         // Suppress the chevron on a 0/1-exit node that's flush-stacked above a
@@ -628,7 +639,7 @@ function FlowGraphInner({
   );
 }
 
-function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] } {
+function layoutFlow(flow: FlowView): { nodes: GraphNode[]; edges: Edge[] } {
   const persisted = flow.layout?.nodes ?? {};
 
   const levels = new Map<string, number>();
@@ -656,27 +667,40 @@ function layoutFlow(flow: FlowView): { nodes: WorkflowNodeType[]; edges: Edge[] 
   }
 
   const X_CENTER = 400;
-  const nodes: WorkflowNodeType[] = [];
+  const nodes: GraphNode[] = [];
 
   for (const [levelStr, ids] of Object.entries(levelGroups)) {
     const level = Number(levelStr);
     ids.forEach((id, idx) => {
       const offset = (idx - (ids.length - 1) / 2) * X_SPACING;
-      const exits = Object.keys(flow.nodes[id].exits);
+      const nodeSpec = flow.nodes[id];
+      const exits = Object.keys(nodeSpec.exits);
       const saved = persisted[id];
       const position = saved
         ? { x: saved.x, y: saved.y }
         : { x: X_CENTER + offset, y: level * Y_SPACING };
-      nodes.push({
-        id,
-        type: 'workflow',
-        position,
-        data: {
-          label: id,
-          icon: <PythonIcon size={16} />,
-          exits,
-        },
-      });
+      if (nodeSpec.kind === 'start') {
+        nodes.push({
+          id,
+          type: 'start',
+          position,
+          data: {
+            label: id,
+            input_type: nodeSpec.input_type,
+          },
+        });
+      } else {
+        nodes.push({
+          id,
+          type: 'workflow',
+          position,
+          data: {
+            label: id,
+            icon: <PythonIcon size={16} />,
+            exits,
+          },
+        });
+      }
     });
   }
 
