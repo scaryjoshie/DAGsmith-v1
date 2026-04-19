@@ -385,15 +385,10 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     f"{flow_id!r}"
                 ),
             )
-        from_exits = from_entry.get("exits")
-        if not isinstance(from_exits, dict) or request.from_exit not in from_exits:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"from_exit {request.from_exit!r} is not declared on node "
-                    f"{request.from_node!r}"
-                ),
-            )
+        # Permissive posture (SPEC §3): accept any from_exit shape. Undeclared
+        # exits surface as `unknown_edge_exit` diagnostics on flow load.
+        # The implicit "out" exit on 0-exit plain-return nodes is also accepted
+        # and exempt from the diagnostic (see workspace.py).
 
         if request.to_node is not None and request.to_node not in nodes:
             raise HTTPException(

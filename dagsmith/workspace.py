@@ -460,19 +460,12 @@ def _collect_shape_diagnostics(flow_id: str, spec: FlowSpec) -> list[Diagnostic]
             )
         )
 
-    for node_id, node in spec.nodes.items():
-        if not node.exits:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="empty_exits",
-                    message=(
-                        f"flow {flow_id!r}: node {node_id!r} declares no exits"
-                    ),
-                    flow_id=flow_id,
-                    node_id=node_id,
-                )
-            )
+    # A node with no declared exits is a plain-return node (SPEC §5 / line 153:
+    # `plain -> out`). The runtime routes its return value through the implicit
+    # DEFAULT_EXIT_NAME ("out") handle. No diagnostic needed — 0-exit is a valid
+    # first-class shape, not a broken one. Edges from such nodes carry
+    # `from_exit="out"` by convention; see the unknown_edge_exit block below
+    # for the implicit-"out" exemption.
 
     if not spec.public_exits:
         diagnostics.append(
@@ -651,7 +644,14 @@ def _validate_flow_structure(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
             )
         else:
             source_node = spec.nodes[edge.from_node]
-            if edge.from_exit not in source_node.exits:
+            # Implicit-"out" exemption: a 0-exit plain-return node routes its
+            # return value through DEFAULT_EXIT_NAME per SPEC §5. Edges with
+            # `from_exit="out"` from such nodes are valid even though "out"
+            # isn't in the declared exits dict.
+            implicit_out = (
+                not source_node.exits and edge.from_exit == DEFAULT_EXIT_NAME
+            )
+            if edge.from_exit not in source_node.exits and not implicit_out:
                 diagnostics.append(
                     Diagnostic(
                         severity="error",

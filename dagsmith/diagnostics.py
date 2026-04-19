@@ -22,7 +22,6 @@ DiagnosticCode = Literal[
     "multiple_public_exits_reached",
     "syntax_error",
     "missing_entry_node",
-    "empty_exits",
     "empty_public_exits",
     "unresolved_flow_ref",
     "subflow_exit_mismatch",

@@ -393,10 +393,18 @@ class TestPermissiveShapeDiagnostics:
         with pytest.raises(WorkspaceError, match="entry_node 'ghost' is not declared"):
             mod._workspace.flow("f")(None)
 
-    def test_empty_exits_emits_diagnostic(self, tmp_path, make_workspace):
+    def test_plain_return_node_routes_through_implicit_out(
+        self, tmp_path, make_workspace
+    ):
+        """A 0-exit plain-return node is a valid shape (SPEC §5: plain -> out).
+
+        The runtime routes its return value through the implicit DEFAULT_EXIT_NAME
+        handle. Edges with from_exit="out" from such nodes are exempt from the
+        unknown_edge_exit diagnostic.
+        """
         mod = make_workspace(
             tmp_path,
-            "ws_empty_exits",
+            "ws_plain_return",
             flows={
                 "f": {
                     "nodes": {
@@ -407,19 +415,22 @@ class TestPermissiveShapeDiagnostics:
                             "exits": {},
                         }
                     },
-                    "edges": [],
+                    "edges": [
+                        {"from_node": "silent", "from_exit": "out", "to_flow_exit": "out"}
+                    ],
                     "entry_node": "silent",
+                    "public_exits": {"out": "typing.Any"},
                 },
             },
         )
         diags = mod._workspace.diagnostics
-        hits = [d for d in diags if d.code == "empty_exits"]
-        assert len(hits) == 1
-        assert hits[0].flow_id == "f"
-        assert hits[0].node_id == "silent"
-        # strict run: invoking raises (no edges to follow after node runs)
-        with pytest.raises(WorkspaceError):
-            mod._workspace.flow("f")(None)
+        # No empty_exits diagnostic (code was removed) and no unknown_edge_exit
+        # since "out" is the implicit exit for a 0-exit source.
+        assert not [d for d in diags if d.code == "unknown_edge_exit"]
+        # Runtime routes plain return through implicit "out" and reaches the
+        # public exit without raising. (builtins:id returns an int, so we just
+        # verify the flow completes; the exact return value isn't the point.)
+        mod._workspace.flow("f")("hello")
 
     def test_empty_public_exits_emits_diagnostic(self, tmp_path, passthrough_node):
         pkg_name = "ws_empty_public_exits"
