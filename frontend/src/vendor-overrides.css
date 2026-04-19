@@ -30,11 +30,17 @@
   }
 
   /* SourceTab CodeMirror surface: full-height editor flush with the dark
-   * surface-0 background, mono font, and a 1px gutter divider in line-0. */
+   * surface-0 background, mono font, and a 1px gutter divider in line-0.
+   *
+   * The @uiw/react-codemirror `theme="dark"` prop injects its own charcoal
+   * bg (#282c34) at the same specificity as our rules. !important beats
+   * it since its injection is not !important. Cover every element that
+   * paints a bg: the outer .cm-editor, the gutters, and the active-line
+   * hint (which @uiw's theme tints to match its own bg). */
   .source-tab-editor .cm-editor {
     height: 100%;
     font-size: var(--text-sm);
-    background: var(--bg-0);
+    background: var(--bg-0) !important;
   }
 
   .source-tab-editor .cm-scroller {
@@ -42,9 +48,14 @@
   }
 
   .source-tab-editor .cm-gutters {
-    background: var(--bg-0);
+    background: var(--bg-0) !important;
     border-right: 1px solid var(--border-0);
     color: var(--fg-3);
+  }
+
+  .source-tab-editor .cm-activeLine,
+  .source-tab-editor .cm-activeLineGutter {
+    background: var(--bg-0) !important;
   }
 
   /* FlowGraph: suppress React Flow's default selection outline — we render
@@ -69,12 +80,17 @@
     border-style: solid !important;
   }
 
-  /* DockviewCanvas: dagsmith-theme overrides dockview-theme-dark with the
-   * Vercel dark token palette. The .dagsmith-theme class is applied on the
-   * DockviewCanvas wrapper element; every rule below targets dockview's
-   * .dv-* internals scoped under that wrapper. */
+  /* DockviewCanvas: dagsmith-theme overrides dockview's built-in palette
+   * with the Vercel dark tokens. DockviewReact auto-applies an inner
+   * `.dockview-theme-abyss` wrapper inside our outer `.dagsmith-theme`;
+   * because CSS custom-property inheritance cascades by DOM proximity,
+   * the inner abyss vars would otherwise beat anything we set on the
+   * outer wrapper (this is how the purple `#2b2b4a` separator line
+   * used to leak through). Scope the var overrides to BOTH wrappers
+   * so we win at every level they could apply. */
 
-  .dagsmith-theme {
+  .dagsmith-theme,
+  .dagsmith-theme .dockview-theme-abyss {
     /* Timing / transitions (carried over from dockview-theme-dark base) */
     --dv-transition-duration: 0.2s;
     --dv-active-sash-transition-duration: 0.1s;
@@ -105,9 +121,15 @@
     --dv-inactivegroup-visiblepanel-tab-color: var(--fg-3);
     --dv-inactivegroup-hiddenpanel-tab-color: var(--fg-3);
 
-    /* Borders / separators */
-    --dv-separator-border: var(--border-0);
-    --dv-paneview-header-border-color: var(--border-0);
+    /* Borders / separators.
+     * `!important` on --dv-separator-border: the inner auto-applied
+     * `.dockview-theme-abyss` wrapper sits unlayered in the cascade and
+     * its normal declaration beats our `@layer base` rule at normal
+     * priority (per CSS Cascade L5: unlayered normal > layered normal).
+     * !important in an early layer flips it: layered !important wins
+     * over unlayered anything. */
+    --dv-separator-border: var(--border-0) !important;
+    --dv-paneview-header-border-color: var(--border-0) !important;
     --dv-drag-over-border-color: var(--border-2);
     --dv-drag-over-background-color: rgba(250, 250, 250, 0.04);
 
