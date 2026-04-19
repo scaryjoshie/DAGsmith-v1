@@ -458,6 +458,30 @@ function FlowGraphInner({
     return result;
   }, [flow.edges]);
 
+  // Leaves: source handles with no outgoing edge — these are inferred public
+  // exits (SPEC §12 line 425, Infer model). The UI shows a downward chevron
+  // inside the handle to say "exits flow here". The implicit "out" handle on
+  // a 0-exit plain-return node counts too.
+  const leafMap = useMemo(() => {
+    const connected = new Set<string>();
+    for (const edge of flow.edges) {
+      connected.add(`${edge.from_node}|${edge.from_exit}`);
+    }
+    const result = new Map<string, Set<string>>();
+    for (const [nodeId, nodeSpec] of Object.entries(flow.nodes)) {
+      const declared = Object.keys(nodeSpec.exits);
+      const handles = declared.length > 0 ? declared : ['out'];
+      const leaves = new Set<string>();
+      for (const exitName of handles) {
+        if (!connected.has(`${nodeId}|${exitName}`)) {
+          leaves.add(exitName);
+        }
+      }
+      if (leaves.size > 0) result.set(nodeId, leaves);
+    }
+    return result;
+  }, [flow.edges, flow.nodes]);
+
   // Detect flush-stacked pairs: node A bottom is flush with node B top.
   // snappedAbove = this node has another node flush-stacked below it.
   // snappedBelow = this node is flush-stacked on top of another node.
@@ -486,20 +510,32 @@ function FlowGraphInner({
 
   const decoratedNodes = useMemo(
     () =>
-      nodes.map((n) => ({
-        ...n,
-        data: {
-          ...n.data,
-          snapTarget: n.id === snapTargetId,
-          exitOrder: layoutExits?.[n.id],
-          onExitsReorder: (newOrder: string[]) => onExitsReorder(n.id, newOrder),
-          severity: nodeSeverity.get(n.id) ?? null,
-          fanOutCounts: fanOutMap.get(n.id),
-          snappedAbove: stackFlags.above.has(n.id),
-          snappedBelow: stackFlags.below.has(n.id),
-        },
-      })),
-    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap, stackFlags],
+      nodes.map((n) => {
+        const snappedAbove = stackFlags.above.has(n.id);
+        const exitCount = n.data.exits?.length ?? 0;
+        // Suppress the chevron on a 0/1-exit node that's flush-stacked above a
+        // follower: the follower IS the effective downstream, so this top isn't
+        // a real leaf. Multi-exit nodes can still have per-exit leaves even when
+        // one exit is stacked, so preserve the set there.
+        const leafExits = snappedAbove && exitCount <= 1
+          ? undefined
+          : leafMap.get(n.id);
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            snapTarget: n.id === snapTargetId,
+            exitOrder: layoutExits?.[n.id],
+            onExitsReorder: (newOrder: string[]) => onExitsReorder(n.id, newOrder),
+            severity: nodeSeverity.get(n.id) ?? null,
+            fanOutCounts: fanOutMap.get(n.id),
+            snappedAbove,
+            snappedBelow: stackFlags.below.has(n.id),
+            leafExits,
+          },
+        };
+      }),
+    [nodes, snapTargetId, layoutExits, onExitsReorder, nodeSeverity, fanOutMap, stackFlags, leafMap],
   );
 
   const mismatchEdgeIndices = useMemo(() => {

@@ -14,6 +14,12 @@ export type WorkflowNodeData = {
   fanOutCounts?: Record<string, number>;
   snappedAbove?: boolean;
   snappedBelow?: boolean;
+  /**
+   * Exit names that are unconnected (inferred public exits under the Infer
+   * model, SPEC §12 line 425). The node renders a downward chevron inside
+   * each leaf handle as a "flow exits here" cue.
+   */
+  leafExits?: Set<string>;
 };
 
 export type WorkflowNode = Node<WorkflowNodeData, 'workflow'>;
@@ -31,6 +37,23 @@ const HANDLE_VISIBLE_EXTRA = '!opacity-100';
 
 const SWITCHER_HANDLE_BASE =
   '!h-[7px] !w-[7px] !rounded-none !border !border-[var(--fg-2)] !bg-[var(--fg-2)] !opacity-0 !left-1/2 transition-opacity duration-150 ease-[ease] group-hover:!opacity-100 hover:!bg-[var(--fg-0)] hover:!border-[var(--fg-0)]';
+
+/**
+ * Downward chevron rendered as a child of a source `<Handle>` to cue that
+ * this exit is an inferred public exit (no outgoing edge — flow terminates
+ * here under the Infer model, SPEC §12 line 425). Positioned outside the
+ * 7x7 handle so it stays visible when the handle itself is dimmed.
+ */
+function LeafChevron() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-0.5 font-mono text-[10px] leading-none text-ink-2"
+    >
+      ▾
+    </span>
+  );
+}
 
 export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
   const connection = useConnection();
@@ -148,12 +171,13 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
                   id={exit}
                   className={switcherHandleClass}
                 />
+                {data.leafExits?.has(exit) && <LeafChevron />}
               </div>
             );
           })}
         </div>
       ) : (
-        <>
+        <div className="relative">
           {(() => {
             const fanCount = data.fanOutCounts?.[exits[0]];
             return fanCount !== undefined && fanCount > 1 ? (
@@ -171,7 +195,8 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
             id={exits[0] ?? 'out'}
             className={handleClass}
           />
-        </>
+          {data.leafExits?.has(exits[0] ?? 'out') && <LeafChevron />}
+        </div>
       )}
     </div>
   );
