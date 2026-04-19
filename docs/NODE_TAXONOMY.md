@@ -20,9 +20,18 @@ Embeds a child flow as a single step. `ref` is a dotted flow ID (`parent.child`)
 
 Subflow nodes also follow the Infer model: an unconnected exit port becomes a public exit of the parent flow.
 
-### Start (planned)
+### Start (`kind: "start"` — shipped in Phase 3)
 
-A virtual entry node that injects a typed value into the graph without any user-written function. Intended for flows that need a specific input shape before the first Python node runs.
+A virtual entry sentinel (▶). Every flow declares exactly one start node — it is the flow's sole entry point. It holds no `ref`, no callable, no source file: the runtime short-circuits through its implicit `out` handle, passing the flow's input payload unchanged downstream.
+
+- **Exits.** One implicit `out` whose type is the flow's declared input type. Authors set the type via the StartInspector (writes to `start.exits["out"]`).
+- **Computed flow fields.** `FlowSpec.entry_node` and `FlowSpec.input_type` are `@computed_field` properties derived from the start node; they aren't stored in `flow.json`. Legacy top-level `entry_node` / `input` keys are stripped via `extra="ignore"`.
+- **Diagnostics.** Zero or multiple starts surface `missing_start_node` / `ambiguous_start_node` (both errors). Invoking such a flow raises `WorkspaceError("no unique start node")` at the entry-check.
+- **UI.** `StartNode` component renders a compact `▶ <shortName(input_type)>` pill with a single bottom handle (no top handle — flow begins here). `StartInspector` shows only an input-type field; no ref, no source, no exit list, no diagnostics panel.
+- **Mutation rules.** Server refuses `DELETE /nodes/{start_id}` with HTTP 400 (structural, not permissive-posture). `AddNodeRequest.kind: Literal["python", "flow"]` — start cannot be user-added via the UI dialog. Rename is refused (structural invariant).
+- **Snap eligibility.** Start IS a valid snap *source* (0 declared exits → implicit "out" → passes the existing `exits.length <= 1` filter). Start is NOT a valid snap *target* — no top handle exists.
+
+Shipped commits: `5aebd0e` (backend), `fa9c69d` (StartNode), `3e3bcfe` (StartInspector), `c8238e5` (delete protection + snap + fitView padding).
 
 ### Action (`kind: "action"` — planned)
 

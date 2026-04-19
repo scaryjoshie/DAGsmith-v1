@@ -515,8 +515,12 @@ Example:
 ```json
 {
   "id": "customer_validation",
-  "input": "RawCustomer",
   "nodes": {
+    "_start": {
+      "kind": "start",
+      "input": "RawCustomer",
+      "exits": { "out": "RawCustomer" }
+    },
     "load": {
       "kind": "python",
       "ref": ".load:process",
@@ -526,10 +530,12 @@ Example:
       }
     }
   },
-  "edges": [],
-  "entry_node": "load",
+  "edges": [
+    { "from_node": "_start", "from_exit": "out", "to_node": "load" }
+  ],
   "layout": {
     "nodes": {
+      "_start": { "x": 120, "y": -60 },
       "load": { "x": 120, "y": 80 }
     },
     "viewport": { "x": 0, "y": 0, "zoom": 1.0 }
@@ -537,7 +543,7 @@ Example:
 }
 ```
 
-The runtime should ignore `layout`. The UI owns it.
+Note: `entry_node` and `input` are not stored at the flow level — both are derived from the unique `kind="start"` node (SPEC §12 line 427). The runtime should ignore `layout`. The UI owns it.
 
 ### Manifest
 
@@ -944,8 +950,11 @@ class ExitSpec:
     type_ref: TypeRef
 
 class NodeSpec:
-    kind: Literal["python", "flow"]
-    ref: str
+    kind: Literal["python", "flow", "start"]
+    # `ref` is required for python + flow kinds; empty for start nodes
+    # (which hold no callable — the runtime passes the payload through
+    # the implicit "out" handle unchanged). See SPEC §12 line 427.
+    ref: str = ""
     input_type: TypeRef
     exits: dict[str, ExitSpec]
     selector_ref: str | None = None
@@ -959,13 +968,21 @@ class EdgeSpec:
 
 class FlowSpec:
     id: str
-    input_type: TypeRef
     nodes: dict[str, NodeSpec]
     edges: list[EdgeSpec]
-    entry_node: str
     description: str = ""
-    # public_exits is NOT stored — it's derived at load time from
-    # unconnected source handles (Infer model, §12 line 425).
+
+    # None of entry_node, input_type, or public_exits are stored in
+    # flow.json — all are derived at load time (SPEC §12 lines 425, 427):
+    #   entry_node  → the unique `kind="start"` node's id
+    #   input_type  → start.exits["out"]
+    #   public_exits → unconnected source handles, merged by name
+    @computed_field
+    @property
+    def entry_node(self) -> str: ...
+    @computed_field
+    @property
+    def input_type(self) -> TypeRef: ...
 ```
 
 This is enough to support:
