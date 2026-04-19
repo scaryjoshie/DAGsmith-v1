@@ -23,10 +23,7 @@ def _valid_flow_raw() -> dict:
         "nodes": {
             "n": _valid_node_raw(),
         },
-        "edges": [
-            {"from_node": "n", "from_exit": "out", "to_flow_exit": "end"},
-        ],
-        "public_exits": {"end": "pkg.Out"},
+        "edges": [],
     }
 
 
@@ -67,24 +64,16 @@ class TestEdgeSpec:
         assert edge.from_node == "a"
         assert edge.from_exit == "out"
         assert edge.to_node == "b"
-        assert edge.to_flow_exit is None
 
-    def test_to_flow_exit(self):
-        edge = EdgeSpec.model_validate(
-            {"from_node": "a", "to_flow_exit": "end"}
-        )
-        assert edge.to_flow_exit == "end"
-        assert edge.to_node is None
-
-    def test_both_set_raises(self):
-        with pytest.raises(ValidationError):
-            EdgeSpec.model_validate(
-                {"from_node": "a", "to_node": "b", "to_flow_exit": "end"}
-            )
-
-    def test_neither_set_raises(self):
+    def test_missing_to_node_raises(self):
         with pytest.raises(ValidationError):
             EdgeSpec.model_validate({"from_node": "a"})
+
+    def test_legacy_to_flow_exit_rejected(self):
+        """SPEC §12 line 425: `to_flow_exit` is gone. An edge must target
+        another node; public exits are inferred from unconnected handles."""
+        with pytest.raises(ValidationError):
+            EdgeSpec.model_validate({"from_node": "a", "to_flow_exit": "end"})
 
 
 class TestFlowSpec:
@@ -102,18 +91,20 @@ class TestFlowSpec:
         assert spec.entry_node == "nonexistent"
         assert FlowSpec.model_validate(spec.model_dump(by_alias=True)) == spec
 
-    def test_empty_public_exits_accepted_and_round_trips(self):
-        raw = _valid_flow_raw()
-        raw["public_exits"] = {}
-        spec = FlowSpec.model_validate(raw)
-        assert spec.public_exits == {}
-        assert FlowSpec.model_validate(spec.model_dump(by_alias=True)) == spec
-
     def test_unknown_top_level_field_tolerated(self):
         raw = _valid_flow_raw()
         raw["future_field"] = {"anything": 1}
         spec = FlowSpec.model_validate(raw)
         assert not hasattr(spec, "future_field")
+
+    def test_stored_public_exits_field_stripped(self):
+        """SPEC §12 line 425: `public_exits` is derived, not stored. Legacy
+        flow.json with the field should be tolerated (extra='ignore') and
+        the attribute should not be exposed on the parsed spec."""
+        raw = _valid_flow_raw()
+        raw["public_exits"] = {"legacy": "pkg.Out"}
+        spec = FlowSpec.model_validate(raw)
+        assert not hasattr(spec, "public_exits")
 
     def test_layout_groups_round_trip(self):
         raw = _valid_flow_raw()

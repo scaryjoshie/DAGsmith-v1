@@ -363,12 +363,6 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
         ws = get_or_404(registry, name)
         path, data = read_flow_json(ws, flow_id)
 
-        if (request.to_node is None) == (request.to_flow_exit is None):
-            raise HTTPException(
-                status_code=400,
-                detail="edge must target exactly one of `to_node` or `to_flow_exit`",
-            )
-
         nodes = data.get("nodes")
         if not isinstance(nodes, dict):
             raise HTTPException(
@@ -390,7 +384,7 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
         # The implicit "out" exit on 0-exit plain-return nodes is also accepted
         # and exempt from the diagnostic (see workspace.py).
 
-        if request.to_node is not None and request.to_node not in nodes:
+        if request.to_node not in nodes:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -398,19 +392,6 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     f"{flow_id!r}"
                 ),
             )
-        if request.to_flow_exit is not None:
-            public_exits = data.get("public_exits")
-            if (
-                not isinstance(public_exits, dict)
-                or request.to_flow_exit not in public_exits
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"to_flow_exit {request.to_flow_exit!r} is not declared in "
-                        f"public_exits"
-                    ),
-                )
 
         edges = data.setdefault("edges", [])
         if not isinstance(edges, list):
@@ -426,18 +407,14 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                 and existing.get("from_node") == request.from_node
                 and existing.get("from_exit") == request.from_exit
                 and existing.get("to_node") == request.to_node
-                and existing.get("to_flow_exit") == request.to_flow_exit
             ):
                 return build_flow_view(ws, flow_id)
 
         new_edge: dict[str, Any] = {
             "from_node": request.from_node,
             "from_exit": request.from_exit,
+            "to_node": request.to_node,
         }
-        if request.to_node is not None:
-            new_edge["to_node"] = request.to_node
-        else:
-            new_edge["to_flow_exit"] = request.to_flow_exit
         edges.append(new_edge)
 
         write_flow_json(path, data)

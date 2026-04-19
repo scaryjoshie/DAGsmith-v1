@@ -2,6 +2,10 @@
 
 These tests build `FlowSpec` and `Workspace` in-memory — no example workspace
 package on disk — to exercise `_run` directly with ad-hoc Python callables.
+
+Under the Infer model (SPEC §12 line 425), public exits are derived from
+unconnected source handles. Tests create leaves by leaving the desired exit
+handle with no outgoing edge; the runtime terminates there.
 """
 
 from __future__ import annotations
@@ -17,7 +21,12 @@ from dagsmith.runtime import (
     MultiplePublicExitsReached,
     emit,
 )
-from dagsmith.workspace import Workspace, WorkspaceError, _LoadedFlow
+from dagsmith.workspace import (
+    Workspace,
+    WorkspaceError,
+    _derive_public_exits,
+    _LoadedFlow,
+)
 
 
 def _node(
@@ -45,7 +54,6 @@ def _flow(
     nodes: Mapping[str, NodeSpec],
     edges: tuple[EdgeSpec, ...],
     entry: str,
-    public_exits: Mapping[str, str],
     input_type: str = "Any",
 ) -> FlowSpec:
     return FlowSpec.model_validate(
@@ -55,7 +63,6 @@ def _flow(
             "nodes": dict(nodes),
             "edges": [e.model_dump() for e in edges],
             "entry_node": entry,
-            "public_exits": dict(public_exits),
         }
     )
 
@@ -73,10 +80,12 @@ def _loaded(
     callables: Mapping[str, Callable[..., Any]],
     selectors: Mapping[str, Callable[..., Any]] | None = None,
 ) -> _LoadedFlow:
+    public_exits, _ = _derive_public_exits(spec.id, spec)
     return _LoadedFlow(
         spec=spec,
         callables=dict(callables),
         selectors=dict(selectors or {}),
+        public_exits=public_exits,
     )
 
 
@@ -117,10 +126,9 @@ def test_fanout_sequential_merge_at_visited_node():
             EdgeSpec(from_node="entry", from_exit="out", to_node="branch_b"),
             EdgeSpec(from_node="branch_a", from_exit="out", to_node="join"),
             EdgeSpec(from_node="branch_b", from_exit="out", to_node="join"),
-            EdgeSpec(from_node="join", from_exit="out", to_flow_exit="done"),
+            # join.out is left unconnected → inferred public exit "out"
         ),
         entry="entry",
-        public_exits={"done": "int"},
     )
 
     ws = _workspace(
@@ -139,7 +147,7 @@ def test_fanout_sequential_merge_at_visited_node():
 
     result = ws.flow("fanout_merge")(5)
 
-    assert result.exit == "done"
+    assert result.exit == "out"
     # first-writer-wins: join ran exactly once; it saw branch_a's payload since
     # branch_a was enqueued first (edge order).
     join_calls = [c for c in calls if c[0] == "join"]
@@ -164,10 +172,9 @@ def test_subflow_execution_payload_flows_through_public_exit():
 
     sub_spec = _flow(
         flow_id="sub",
-        nodes={"only": _node({"out": "int"})},
-        edges=(EdgeSpec(from_node="only", from_exit="out", to_flow_exit="done"),),
+        nodes={"only": _node({"done": "int"})},
+        edges=(),  # only.done unconnected → public exit "done"
         entry="only",
-        public_exits={"done": "int"},
     )
 
     def tail(x: int) -> int:
@@ -181,10 +188,9 @@ def test_subflow_execution_payload_flows_through_public_exit():
         },
         edges=(
             EdgeSpec(from_node="sub_node", from_exit="done", to_node="tail"),
-            EdgeSpec(from_node="tail", from_exit="out", to_flow_exit="final"),
+            # tail.out unconnected → public exit "out"
         ),
         entry="sub_node",
-        public_exits={"final": "int"},
     )
 
     ws = _workspace(
@@ -195,7 +201,7 @@ def test_subflow_execution_payload_flows_through_public_exit():
     )
 
     result = ws.flow("parent")(10)
-    assert result.exit == "final"
+    assert result.exit == "out"
     assert result.value == 21  # (10 * 2) + 1
 
 
@@ -216,17 +222,17 @@ def test_multiple_public_exits_reached_raised_on_divergent_fanout():
         flow_id="diverge",
         nodes={
             "entry": _node({"out": "int"}),
-            "left": _node({"out": "int"}),
-            "right": _node({"out": "int"}),
+            # left + right have distinct exit names so they become distinct
+            # inferred public exits ("a" and "b") under the Infer model.
+            "left": _node({"a": "int"}),
+            "right": _node({"b": "int"}),
         },
         edges=(
             EdgeSpec(from_node="entry", from_exit="out", to_node="left"),
             EdgeSpec(from_node="entry", from_exit="out", to_node="right"),
-            EdgeSpec(from_node="left", from_exit="out", to_flow_exit="a"),
-            EdgeSpec(from_node="right", from_exit="out", to_flow_exit="b"),
+            # left.a and right.b both unconnected → two public exits
         ),
         entry="entry",
-        public_exits={"a": "int", "b": "int"},
     )
 
     ws = _workspace(
@@ -256,12 +262,8 @@ def test_ambiguous_route_raised_for_plain_return_on_multi_exit_node():
         nodes={
             "ambiguous": _node({"a": "int", "b": "int"}),
         },
-        edges=(
-            EdgeSpec(from_node="ambiguous", from_exit="a", to_flow_exit="a"),
-            EdgeSpec(from_node="ambiguous", from_exit="b", to_flow_exit="b"),
-        ),
+        edges=(),  # both handles unconnected → public exits "a" and "b"
         entry="ambiguous",
-        public_exits={"a": "int", "b": "int"},
     )
 
     ws = _workspace(
@@ -276,8 +278,9 @@ def test_ambiguous_route_raised_for_plain_return_on_multi_exit_node():
 
 
 def test_tracer_receives_edges_in_order_including_subflow_frames():
-    """Tracer fires on every edge crossing; subflow edges interleave between
-    the parent's edges that feed into / come out of the subflow node."""
+    """Tracer fires on every edge crossing (including terminal leaf exits);
+    subflow edges interleave between the parent's edges that feed into /
+    come out of the subflow node."""
 
     def sub_entry(x: int) -> int:
         return x + 100
@@ -293,10 +296,9 @@ def test_tracer_receives_edges_in_order_including_subflow_frames():
         },
         edges=(
             EdgeSpec(from_node="sub_entry", from_exit="out", to_node="sub_tail"),
-            EdgeSpec(from_node="sub_tail", from_exit="done", to_flow_exit="done"),
+            # sub_tail.done unconnected → public exit "done"
         ),
         entry="sub_entry",
-        public_exits={"done": "int"},
     )
 
     def parent_entry(x: int) -> int:
@@ -319,12 +321,9 @@ def test_tracer_receives_edges_in_order_including_subflow_frames():
             EdgeSpec(
                 from_node="sub_node", from_exit="done", to_node="parent_tail"
             ),
-            EdgeSpec(
-                from_node="parent_tail", from_exit="out", to_flow_exit="final"
-            ),
+            # parent_tail.out unconnected → public exit "out"
         ),
         entry="parent_entry",
-        public_exits={"final": "int"},
     )
 
     ws = _workspace(
@@ -346,17 +345,19 @@ def test_tracer_receives_edges_in_order_including_subflow_frames():
         events.append((flow_id, from_node, from_exit, to, payload))
 
     result = ws.flow("parent")(5, tracer=tracer)
-    assert result.exit == "final"
+    assert result.exit == "out"
     # 5 -> parent_entry -> sub_node (subflow: 5 -> sub_entry -> sub_tail -> done(106))
-    # -> parent_tail(106) -> final(212)
+    # -> parent_tail(106) -> out(212)
     assert result.value == 212
 
+    # Terminal leaf exits still fire the tracer, with to==exit_name (the
+    # public exit name under the Infer model).
     assert events == [
         ("parent", "parent_entry", "out", "sub_node", 5),
         ("sub", "sub_entry", "out", "sub_tail", 105),
         ("sub", "sub_tail", "done", "done", 106),
         ("parent", "sub_node", "done", "parent_tail", 106),
-        ("parent", "parent_tail", "out", "final", 212),
+        ("parent", "parent_tail", "out", "out", 212),
     ]
 
 
@@ -369,13 +370,12 @@ def test_tracer_not_called_when_absent():
     spec = _flow(
         flow_id="simple",
         nodes={"one": _node({"out": "int"})},
-        edges=(EdgeSpec(from_node="one", from_exit="out", to_flow_exit="done"),),
+        edges=(),  # one.out unconnected → public exit "out"
         entry="one",
-        public_exits={"done": "int"},
     )
     ws = _workspace({"simple": _loaded(spec, callables={"one": one})})
     result = ws.flow("simple")(5)
-    assert result.exit == "done"
+    assert result.exit == "out"
     assert result.value == 6
 
 
@@ -388,12 +388,8 @@ def test_emit_routes_to_named_exit():
     spec = _flow(
         flow_id="decide",
         nodes={"decide": _node({"even": "int", "odd": "int"})},
-        edges=(
-            EdgeSpec(from_node="decide", from_exit="even", to_flow_exit="even"),
-            EdgeSpec(from_node="decide", from_exit="odd", to_flow_exit="odd"),
-        ),
+        edges=(),  # both handles unconnected → public exits "even" + "odd"
         entry="decide",
-        public_exits={"even": "int", "odd": "int"},
     )
     ws = _workspace({"decide": _loaded(spec, callables={"decide": decide})})
     assert ws.flow("decide")(4).exit == "even"
@@ -412,7 +408,6 @@ def test_in_invocation_cycle_drains_queue_without_public_exit():
             EdgeSpec(from_node="b", from_exit="out", to_node="a"),
         ),
         entry="a",
-        public_exits={"done": "int"},
     )
     ws = _workspace({"loopy": _loaded(spec, callables={"a": passthrough, "b": passthrough})})
     with pytest.raises(WorkspaceError, match="without reaching any public exit"):
@@ -429,9 +424,8 @@ def test_node_body_exception_propagates():
     spec = _flow(
         flow_id="bang",
         nodes={"boom": _node({"out": "int"})},
-        edges=(EdgeSpec(from_node="boom", from_exit="out", to_flow_exit="done"),),
+        edges=(),
         entry="boom",
-        public_exits={"done": "int"},
     )
     ws = _workspace({"bang": _loaded(spec, callables={"boom": detonate})})
     with pytest.raises(Boom, match="intentional"):

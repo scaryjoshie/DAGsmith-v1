@@ -7,7 +7,7 @@ only the loader, validator, and runner touch them.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping, Optional
+from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -27,37 +27,37 @@ class NodeSpec(_Base):
     ref: str
     input_type: TypeRef = Field(alias="input")
     exits: Mapping[str, TypeRef]
-    selector_ref: Optional[str] = Field(default=None, alias="selector")
+    selector_ref: str | None = Field(default=None, alias="selector")
     label: str = ""
     description: str = ""
 
 
 class EdgeSpec(_Base):
-    """A directed edge from one node exit to another node or a public flow exit."""
+    """A directed edge from one node exit to another node.
+
+    Under the Infer model (SPEC §12 line 425), public exits are derived from
+    unconnected source handles — not represented by edges. An edge must
+    target another node.
+    """
 
     from_node: str
     from_exit: str = DEFAULT_EXIT_NAME
-    to_node: Optional[str] = None
-    to_flow_exit: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _check_target(self) -> "EdgeSpec":
-        if (self.to_node is None) == (self.to_flow_exit is None):
-            raise ValueError(
-                "edges must target exactly one of `to_node` or `to_flow_exit`"
-            )
-        return self
+    to_node: str
 
 
 class FlowSpec(_Base):
-    """A flow: a DAG of nodes with named public exits. A flow is a pure function."""
+    """A flow: a DAG of nodes. A flow is a pure function.
+
+    `public_exits` are not stored — they are derived at load time by
+    `workspace._derive_public_exits` from source handles with no outgoing
+    edge. See SPEC §12 line 425 (Infer model).
+    """
 
     id: str
     input_type: TypeRef = Field(alias="input")
     nodes: Mapping[str, NodeSpec]
     edges: tuple[EdgeSpec, ...] = ()
     entry_node: str
-    public_exits: Mapping[str, TypeRef]
     description: str = ""
     layout: Mapping[str, Any] = Field(default_factory=dict)
 

@@ -50,11 +50,17 @@ class WorkspaceError(ValueError):
 
 @dataclass(frozen=True)
 class _LoadedFlow:
-    """A FlowSpec plus its eagerly resolved callables, ready to execute."""
+    """A FlowSpec plus its eagerly resolved callables, ready to execute.
+
+    `public_exits` is derived at load time from unconnected source handles
+    (SPEC §12 line 425, Infer model). It's kept on `_LoadedFlow` rather than
+    `FlowSpec` because it's computed, not stored in flow.json.
+    """
 
     spec: FlowSpec
     callables: Mapping[str, Callable[..., Any] | UnresolvableRef]
     selectors: Mapping[str, Callable[..., Any] | UnresolvableRef]
+    public_exits: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -102,6 +108,10 @@ class Workspace:
     def flow_spec(self, flow_id: str) -> "FlowSpec":
         """Return the FlowSpec for a named flow (advanced introspection)."""
         return self._require_loaded(flow_id).spec
+
+    def public_exits(self, flow_id: str) -> Mapping[str, str]:
+        """Return the inferred public exits (name -> type) for a named flow."""
+        return self._require_loaded(flow_id).public_exits
 
     def node_callable(
         self, flow_id: str, node_name: str
@@ -193,22 +203,21 @@ class Workspace:
                 for edge in spec.edges
                 if edge.from_node == node_id and edge.from_exit == exit_name
             ]
+
+            # Infer model (SPEC §12 line 425): an unconnected source handle
+            # is a public exit. If the exit the node chose has no outgoing
+            # edge, the flow terminates here with public exit name = the
+            # exit name itself (merge-by-name happens at derivation time).
             if not matching:
-                raise WorkspaceError(
-                    f"no outgoing edge for {node_id!r}:{exit_name!r} "
-                    f"in flow {flow_id!r}"
-                )
+                if tracer is not None:
+                    tracer(flow_id, node_id, exit_name, exit_name, new_value)
+                reached_exits.append((exit_name, new_value))
+                continue
 
             for edge in matching:
-                if edge.to_flow_exit is not None:
-                    if tracer is not None:
-                        tracer(flow_id, node_id, exit_name, edge.to_flow_exit, new_value)
-                    reached_exits.append((edge.to_flow_exit, new_value))
-                else:
-                    assert edge.to_node is not None
-                    if tracer is not None:
-                        tracer(flow_id, node_id, exit_name, edge.to_node, new_value)
-                    queue.append((edge.to_node, new_value))
+                if tracer is not None:
+                    tracer(flow_id, node_id, exit_name, edge.to_node, new_value)
+                queue.append((edge.to_node, new_value))
 
         if not reached_exits:
             raise WorkspaceError(
@@ -328,13 +337,16 @@ def load_workspace(package_name: str) -> Workspace:
                     diagnostics=diagnostics,
                 )
 
-        diagnostics.extend(_collect_shape_diagnostics(flow_id, spec))
+        public_exits, exit_diagnostics = _derive_public_exits(flow_id, spec)
+        diagnostics.extend(exit_diagnostics)
+        diagnostics.extend(_collect_shape_diagnostics(flow_id, spec, public_exits))
         diagnostics.extend(_validate_flow_structure(flow_id, spec))
 
         flows[flow_id] = _LoadedFlow(
             spec=spec,
             callables=node_callables,
             selectors=selector_callables,
+            public_exits=public_exits,
         )
 
     diagnostics.extend(_detect_unresolved_flow_refs(flows))
@@ -438,11 +450,13 @@ def _resolve_ref(ref: str, anchor_package: str) -> Callable[..., Any]:
     return func
 
 
-def _collect_shape_diagnostics(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
+def _collect_shape_diagnostics(
+    flow_id: str, spec: FlowSpec, public_exits: Mapping[str, str]
+) -> list[Diagnostic]:
     """Load-time shape checks that used to raise pre-M1.
 
-    Emits diagnostics for: missing entry_node (not in spec.nodes), nodes
-    with empty exits, and flows with empty public_exits.
+    Emits diagnostics for: missing entry_node (not in spec.nodes), and flows
+    with no inferred public exits.
     """
     diagnostics: list[Diagnostic] = []
 
@@ -467,20 +481,89 @@ def _collect_shape_diagnostics(flow_id: str, spec: FlowSpec) -> list[Diagnostic]
     # `from_exit="out"` by convention; see the unknown_edge_exit block below
     # for the implicit-"out" exemption.
 
-    if not spec.public_exits:
+    if not public_exits:
         diagnostics.append(
             Diagnostic(
                 severity="error",
-                code="empty_public_exits",
+                code="no_public_exits",
                 message=(
-                    f"flow {flow_id!r}: public_exits is empty; flow has no "
-                    f"reachable exit"
+                    f"flow {flow_id!r}: no public exits inferred; every source "
+                    f"handle is connected to another node, so the flow has no "
+                    f"reachable terminus"
                 ),
                 flow_id=flow_id,
             )
         )
 
     return diagnostics
+
+
+def _derive_public_exits(
+    flow_id: str, spec: FlowSpec
+) -> tuple[dict[str, str], list[Diagnostic]]:
+    """Infer the flow's public exits from unconnected source handles.
+
+    Per SPEC §12 line 425 (Infer model): any (node_id, exit_name) pair with no
+    outgoing edge is a public exit. The exit's public name is `exit_name` (so
+    two leaves sharing a name share one merged public exit). The public type
+    is the common contributing type when all agree, else `typing.Any` with a
+    `merged_exit_type_mismatch` warning.
+
+    Action-kind nodes (SPEC §12 line 431, not-yet-shipped) don't contribute to
+    public exits. Kind=`"flow"` subflow nodes participate normally.
+    """
+    diagnostics: list[Diagnostic] = []
+
+    # Collect (exit_name, node_id, type) for every unconnected source handle.
+    connected: set[tuple[str, str]] = {
+        (edge.from_node, edge.from_exit) for edge in spec.edges
+    }
+
+    contributions: dict[str, list[tuple[str, str]]] = {}
+    for node_id, node in spec.nodes.items():
+        if node.kind not in ("python", "flow"):
+            # Planted guard for `action` kind (SPEC §12 line 431) once shipped.
+            continue
+
+        # Source handles are the declared exits, plus the implicit "out" on
+        # 0-exit plain-return nodes (SPEC §5).
+        if node.exits:
+            handles = [(name, t) for name, t in node.exits.items()]
+        else:
+            handles = [(DEFAULT_EXIT_NAME, node.input_type)]
+
+        for exit_name, exit_type in handles:
+            if (node_id, exit_name) in connected:
+                continue
+            contributions.setdefault(exit_name, []).append((node_id, exit_type))
+
+    public_exits: dict[str, str] = {}
+    for exit_name, contribs in contributions.items():
+        types = {t for _, t in contribs}
+        if len(types) == 1:
+            public_exits[exit_name] = contribs[0][1]
+            continue
+        public_exits[exit_name] = "typing.Any"
+        contributing_nodes = sorted(n for n, _ in contribs)
+        diagnostics.append(
+            Diagnostic(
+                severity="warning",
+                code="merged_exit_type_mismatch",
+                message=(
+                    f"flow {flow_id!r}: inferred public exit {exit_name!r} is "
+                    f"contributed by nodes {contributing_nodes} with differing "
+                    f"types {sorted(types)}; merged type is typing.Any"
+                ),
+                flow_id=flow_id,
+                detail={
+                    "exit_name": exit_name,
+                    "contributing_nodes": contributing_nodes,
+                    "types": sorted(types),
+                },
+            )
+        )
+
+    return public_exits, diagnostics
 
 
 def _detect_unresolved_flow_refs(
@@ -616,16 +699,14 @@ def _tarjan_sccs(
 
 
 def _validate_flow_structure(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
-    """Check edges reference valid nodes, exits, and public exits.
+    """Check edges reference valid nodes and exits.
 
     Returns a list of diagnostics rather than raising (SPEC §6.4 gap 3).
-    Codes emitted: `dangling_edge_target` (unknown from_node / to_node /
-    to_flow_exit) and `unknown_edge_exit` (from_exit not declared on the
-    source node).
+    Codes emitted: `dangling_edge_target` (unknown from_node / to_node) and
+    `unknown_edge_exit` (from_exit not declared on the source node).
     """
     diagnostics: list[Diagnostic] = []
     node_names = set(spec.nodes.keys())
-    public_exit_names = set(spec.public_exits.keys())
 
     for idx, edge in enumerate(spec.edges):
         if edge.from_node not in node_names:
@@ -667,7 +748,7 @@ def _validate_flow_structure(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
                         detail={"from_exit": edge.from_exit},
                     )
                 )
-        if edge.to_node is not None and edge.to_node not in node_names:
+        if edge.to_node not in node_names:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -681,31 +762,11 @@ def _validate_flow_structure(flow_id: str, spec: FlowSpec) -> list[Diagnostic]:
                     detail={"to_node": edge.to_node},
                 )
             )
-        if (
-            edge.to_flow_exit is not None
-            and edge.to_flow_exit not in public_exit_names
-        ):
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="dangling_edge_target",
-                    message=(
-                        f"flow {flow_id!r}: edge targets unknown to_flow_exit "
-                        f"{edge.to_flow_exit!r} "
-                        f"(declared public exits: {sorted(public_exit_names)})"
-                    ),
-                    flow_id=flow_id,
-                    edge_index=idx,
-                    detail={"to_flow_exit": edge.to_flow_exit},
-                )
-            )
 
         # Type mismatch: source exit type vs. target node input type.
-        # Skip edges to public exits (cross-flow boundary — separate check).
         # Skip if either node is unknown (already emitted dangling_edge_target).
         if (
-            edge.to_node is not None
-            and edge.to_node in node_names
+            edge.to_node in node_names
             and edge.from_node in node_names
         ):
             source_node = spec.nodes[edge.from_node]

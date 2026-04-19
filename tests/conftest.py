@@ -24,9 +24,13 @@ def _write_flow(
     nodes: dict[str, dict[str, Any]],
     edges: list[dict[str, Any]],
     entry_node: str,
-    public_exits: dict[str, str] | None = None,
 ) -> None:
-    """Write a flow.json under root/flow_id/ (dots become nested dirs)."""
+    """Write a flow.json under root/flow_id/ (dots become nested dirs).
+
+    Under the Infer model (SPEC §12 line 425), public_exits is derived from
+    unconnected source handles — the caller does not pass it. Shape leafage
+    is controlled by what's in `edges`.
+    """
     flow_dir = root / Path(*flow_id.split("."))
     flow_dir.mkdir(parents=True, exist_ok=True)
     (flow_dir / "__init__.py").write_text("", encoding="utf-8")
@@ -38,7 +42,6 @@ def _write_flow(
                 "entry_node": entry_node,
                 "nodes": nodes,
                 "edges": edges,
-                "public_exits": public_exits or {"out": "typing.Any"},
             }
         ),
         encoding="utf-8",
@@ -64,7 +67,8 @@ def make_workspace() -> Callable[..., Any]:
 
     Signature: make_workspace(tmp_path, pkg_name, flows) -> module
 
-    `flows` maps flow_id -> {"nodes", "edges", "entry_node", "public_exits"?}.
+    `flows` maps flow_id -> {"nodes", "edges", "entry_node"}. Public exits
+    are derived from unconnected source handles (SPEC §12 line 425).
     """
 
     def _make(
@@ -92,7 +96,6 @@ def make_workspace() -> Callable[..., Any]:
                 nodes=data["nodes"],
                 edges=data["edges"],
                 entry_node=data["entry_node"],
-                public_exits=data.get("public_exits"),
             )
         # make intermediate dirs along every dotted flow_id valid packages
         for flow_id in flows:
@@ -180,6 +183,17 @@ def _build_server_workspace(tmp_path: Path, pkg_name: str) -> Path:
         ).lstrip(),
         encoding="utf-8",
     )
+    (flow_dir / "trailer.py").write_text(
+        textwrap.dedent(
+            """
+            from typing import Any
+
+            def run(value: Any) -> Any:
+                return value
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
     (flow_dir / "flow.json").write_text(
         json.dumps(
             {
@@ -193,6 +207,12 @@ def _build_server_workspace(tmp_path: Path, pkg_name: str) -> Path:
                         "input": "typing.Any",
                         "exits": {"out": "typing.Any"},
                     },
+                    "trailer": {
+                        "kind": "python",
+                        "ref": ".trailer:run",
+                        "input": "typing.Any",
+                        "exits": {"out": "typing.Any"},
+                    },
                     "broken": {
                         "kind": "python",
                         "ref": ".broken:go",
@@ -201,9 +221,8 @@ def _build_server_workspace(tmp_path: Path, pkg_name: str) -> Path:
                     },
                 },
                 "edges": [
-                    {"from_node": "greet", "from_exit": "out", "to_flow_exit": "out"},
+                    {"from_node": "greet", "from_exit": "out", "to_node": "trailer"},
                 ],
-                "public_exits": {"out": "typing.Any"},
             }
         ),
         encoding="utf-8",
@@ -320,14 +339,7 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [
-                    {
-                        "from_node": "call_child",
-                        "from_exit": "out",
-                        "to_flow_exit": "out",
-                    }
-                ],
-                "public_exits": {"out": "typing.Any"},
+                "edges": [],
             }
         ),
         encoding="utf-8",
@@ -350,10 +362,7 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [
-                    {"from_node": "leaf", "from_exit": "out", "to_flow_exit": "out"}
-                ],
-                "public_exits": {"out": "typing.Any"},
+                "edges": [],
             }
         ),
         encoding="utf-8",
@@ -377,10 +386,7 @@ def nested_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [
-                    {"from_node": "leaf", "from_exit": "out", "to_flow_exit": "out"}
-                ],
-                "public_exits": {"out": "typing.Any"},
+                "edges": [],
             }
         ),
         encoding="utf-8",
@@ -479,10 +485,7 @@ def typed_server_pkg(tmp_path: Path):
                         "exits": {"out": "typing.Any"},
                     }
                 },
-                "edges": [
-                    {"from_node": "go", "from_exit": "out", "to_flow_exit": "out"}
-                ],
-                "public_exits": {"out": "typing.Any"},
+                "edges": [],
             }
         ),
         encoding="utf-8",

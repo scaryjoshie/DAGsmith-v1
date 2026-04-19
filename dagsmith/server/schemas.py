@@ -27,12 +27,15 @@ class EdgeView(BaseModel):
 
     from_node: str
     from_exit: str
-    to_node: str | None
-    to_flow_exit: str | None
+    to_node: str
 
 
 class FlowView(BaseModel):
     """UI-facing view of a full flow — graph + source code + UI layout.
+
+    `public_exits` is derived (Infer model, SPEC §12 line 425) from
+    unconnected source handles, populated at response-build time from the
+    loaded flow's derived public-exit map.
 
     `diagnostics` is populated from the workspace's current diagnostic list
     filtered to this flow_id. Set on both GETs and mutation responses so
@@ -98,8 +101,7 @@ class AddNodeRequest(BaseModel):
 class AddEdgeRequest(BaseModel):
     from_node: str
     from_exit: str
-    to_node: str | None = None
-    to_flow_exit: str | None = None
+    to_node: str
 
 
 class DeleteEdgeRequest(BaseModel):

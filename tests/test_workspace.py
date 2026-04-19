@@ -1,4 +1,9 @@
-"""Tests for workspace loading and validation."""
+"""Tests for workspace loading and validation.
+
+Under the Infer model (SPEC §12 line 425), public exits are derived from
+unconnected source handles. Tests use unconnected handles to create leaves;
+there's no `to_flow_exit` anywhere.
+"""
 
 from __future__ import annotations
 
@@ -54,29 +59,22 @@ class TestCrossFlowCycleDiagnostics:
                     "edges": [
                         {"from_node": "call_b", "from_exit": "out", "to_node": "merge"},
                         {"from_node": "call_c", "from_exit": "out", "to_node": "merge"},
-                        {"from_node": "merge", "from_exit": "out", "to_flow_exit": "out"},
                     ],
                     "entry_node": "call_b",
                 },
                 "b": {
                     "nodes": {"call_d": flow_ref_node("d")},
-                    "edges": [
-                        {"from_node": "call_d", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_d",
                 },
                 "c": {
                     "nodes": {"call_d": flow_ref_node("d")},
-                    "edges": [
-                        {"from_node": "call_d", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_d",
                 },
                 "d": {
                     "nodes": {"leaf": passthrough_node()},
-                    "edges": [
-                        {"from_node": "leaf", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "leaf",
                 },
             },
@@ -91,13 +89,7 @@ class TestCrossFlowCycleDiagnostics:
             flows={
                 "a": {
                     "nodes": {"call_self": flow_ref_node("a")},
-                    "edges": [
-                        {
-                            "from_node": "call_self",
-                            "from_exit": "out",
-                            "to_flow_exit": "out",
-                        }
-                    ],
+                    "edges": [],
                     "entry_node": "call_self",
                 },
             },
@@ -121,16 +113,12 @@ class TestCrossFlowCycleDiagnostics:
             flows={
                 "a": {
                     "nodes": {"call_b": flow_ref_node("b")},
-                    "edges": [
-                        {"from_node": "call_b", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_b",
                 },
                 "b": {
                     "nodes": {"call_a": flow_ref_node("a")},
-                    "edges": [
-                        {"from_node": "call_a", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_a",
                 },
             },
@@ -154,23 +142,17 @@ class TestCrossFlowCycleDiagnostics:
             flows={
                 "a": {
                     "nodes": {"call_b": flow_ref_node("b")},
-                    "edges": [
-                        {"from_node": "call_b", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_b",
                 },
                 "b": {
                     "nodes": {"call_c": flow_ref_node("c")},
-                    "edges": [
-                        {"from_node": "call_c", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_c",
                 },
                 "c": {
                     "nodes": {"call_a": flow_ref_node("a")},
-                    "edges": [
-                        {"from_node": "call_a", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_a",
                 },
             },
@@ -192,9 +174,7 @@ class TestCrossFlowCycleDiagnostics:
             flows={
                 "a": {
                     "nodes": {"call_a": flow_ref_node("a")},
-                    "edges": [
-                        {"from_node": "call_a", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_a",
                 },
             },
@@ -211,23 +191,17 @@ class TestCrossFlowCycleDiagnostics:
             flows={
                 "a": {
                     "nodes": {"call_b": flow_ref_node("b")},
-                    "edges": [
-                        {"from_node": "call_b", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_b",
                 },
                 "b": {
                     "nodes": {"call_c": flow_ref_node("c")},
-                    "edges": [
-                        {"from_node": "call_c", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "call_c",
                 },
                 "c": {
                     "nodes": {"leaf": passthrough_node()},
-                    "edges": [
-                        {"from_node": "leaf", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "leaf",
                 },
             },
@@ -277,10 +251,7 @@ class TestSubflowResolution:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "doubler", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
-                    "public_exits": {"out": "typing.Any"},
+                    "edges": [],
                 }
             ),
             encoding="utf-8",
@@ -303,14 +274,7 @@ class TestSubflowResolution:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {
-                            "from_node": "call_child",
-                            "from_exit": "out",
-                            "to_flow_exit": "out",
-                        }
-                    ],
-                    "public_exits": {"out": "typing.Any"},
+                    "edges": [],
                 }
             ),
             encoding="utf-8",
@@ -341,11 +305,8 @@ class TestWorkspaceDiagnosticsField:
             flows={
                 "caller": {
                     "nodes": {"go": flow_ref_node("missing")},
-                    "edges": [
-                        {"from_node": "go", "from_exit": "out", "to_flow_exit": "done"}
-                    ],
+                    "edges": [],
                     "entry_node": "go",
-                    "public_exits": {"done": "typing.Any"},
                 },
             },
         )
@@ -374,9 +335,7 @@ class TestPermissiveShapeDiagnostics:
             flows={
                 "f": {
                     "nodes": {"leaf": passthrough_node()},
-                    "edges": [
-                        {"from_node": "leaf", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "ghost",
                 },
             },
@@ -399,8 +358,8 @@ class TestPermissiveShapeDiagnostics:
         """A 0-exit plain-return node is a valid shape (SPEC §5: plain -> out).
 
         The runtime routes its return value through the implicit DEFAULT_EXIT_NAME
-        handle. Edges with from_exit="out" from such nodes are exempt from the
-        unknown_edge_exit diagnostic.
+        handle. The implicit "out" handle on such nodes becomes an inferred
+        public exit by default.
         """
         mod = make_workspace(
             tmp_path,
@@ -415,47 +374,216 @@ class TestPermissiveShapeDiagnostics:
                             "exits": {},
                         }
                     },
-                    "edges": [
-                        {"from_node": "silent", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "silent",
-                    "public_exits": {"out": "typing.Any"},
                 },
             },
         )
         diags = mod._workspace.diagnostics
-        # No empty_exits diagnostic (code was removed) and no unknown_edge_exit
-        # since "out" is the implicit exit for a 0-exit source.
+        # No unknown_edge_exit diagnostic; the implicit "out" is an inferred
+        # public exit and there are no edges.
         assert not [d for d in diags if d.code == "unknown_edge_exit"]
+        # The derived public exits contain "out" (the implicit handle on a
+        # 0-exit plain-return node).
+        assert dict(mod._workspace.public_exits("f")) == {"out": "typing.Any"}
         # Runtime routes plain return through implicit "out" and reaches the
         # public exit without raising. (builtins:id returns an int, so we just
         # verify the flow completes; the exact return value isn't the point.)
         mod._workspace.flow("f")("hello")
 
-    def test_empty_public_exits_emits_diagnostic(self, tmp_path, passthrough_node):
-        pkg_name = "ws_empty_public_exits"
+    def test_flow_with_no_public_exits_emits_diagnostic(
+        self, tmp_path, make_workspace, passthrough_node
+    ):
+        """A flow where every source handle is connected (no leaves) has no
+        inferred public exit — emit `no_public_exits`."""
+        mod = make_workspace(
+            tmp_path,
+            "ws_no_public_exits",
+            flows={
+                "f": {
+                    "nodes": {
+                        "a": passthrough_node(),
+                        "b": passthrough_node(),
+                    },
+                    # Both "out" handles are connected to each other → no leaves.
+                    "edges": [
+                        {"from_node": "a", "from_exit": "out", "to_node": "b"},
+                        {"from_node": "b", "from_exit": "out", "to_node": "a"},
+                    ],
+                    "entry_node": "a",
+                },
+            },
+        )
+        diags = mod._workspace.diagnostics
+        hits = [d for d in diags if d.code == "no_public_exits"]
+        assert len(hits) == 1
+        assert hits[0].flow_id == "f"
+
+
+class TestInferPublicExits:
+    """SPEC §12 line 425 (Infer model): public exits are derived from
+    unconnected source handles, merged by name."""
+
+    def test_derive_public_exits_from_unconnected_handles(
+        self, tmp_path, make_workspace
+    ):
+        """Each unconnected (node, exit) contributes one public exit named
+        after the exit, typed from the source handle."""
+        mod = make_workspace(
+            tmp_path,
+            "ws_infer_simple",
+            flows={
+                "f": {
+                    "nodes": {
+                        "gate": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {
+                                "valid": "mymod.Customer",
+                                "invalid": "mymod.Error",
+                            },
+                        },
+                    },
+                    "edges": [],
+                    "entry_node": "gate",
+                },
+            },
+        )
+        exits = dict(mod._workspace.public_exits("f"))
+        assert exits == {"valid": "mymod.Customer", "invalid": "mymod.Error"}
+        # No type-mismatch warnings since each exit has a single contributor.
+        codes = [d.code for d in mod._workspace.diagnostics]
+        assert "merged_exit_type_mismatch" not in codes
+
+    def test_derive_public_exits_merges_by_name(self, tmp_path, make_workspace):
+        """Two leaves with the same exit_name merge into one public exit."""
+        mod = make_workspace(
+            tmp_path,
+            "ws_infer_merge",
+            flows={
+                "f": {
+                    "nodes": {
+                        "entry": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                        "check_a": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"invalid": "mymod.Error"},
+                        },
+                        "check_b": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"invalid": "mymod.Error"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "entry", "from_exit": "out", "to_node": "check_a"},
+                        {"from_node": "entry", "from_exit": "out", "to_node": "check_b"},
+                        # check_a.invalid and check_b.invalid are both unconnected
+                        # with matching types → merge into a single public "invalid".
+                    ],
+                    "entry_node": "entry",
+                },
+            },
+        )
+        exits = dict(mod._workspace.public_exits("f"))
+        assert exits == {"invalid": "mymod.Error"}
+        # Types agree, so no merged_exit_type_mismatch warning.
+        codes = [d.code for d in mod._workspace.diagnostics]
+        assert "merged_exit_type_mismatch" not in codes
+
+    def test_merged_exit_type_mismatch_warns(self, tmp_path, make_workspace):
+        """Two leaves sharing a name but with different types: merge to
+        typing.Any and emit a `merged_exit_type_mismatch` warning."""
+        mod = make_workspace(
+            tmp_path,
+            "ws_infer_mismatch",
+            flows={
+                "f": {
+                    "nodes": {
+                        "entry": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        },
+                        "check_a": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"invalid": "mymod.TypeA"},
+                        },
+                        "check_b": {
+                            "kind": "python",
+                            "ref": "builtins:id",
+                            "input": "typing.Any",
+                            "exits": {"invalid": "mymod.TypeB"},
+                        },
+                    },
+                    "edges": [
+                        {"from_node": "entry", "from_exit": "out", "to_node": "check_a"},
+                        {"from_node": "entry", "from_exit": "out", "to_node": "check_b"},
+                    ],
+                    "entry_node": "entry",
+                },
+            },
+        )
+        exits = dict(mod._workspace.public_exits("f"))
+        assert exits == {"invalid": "typing.Any"}
+        warnings = [
+            d for d in mod._workspace.diagnostics
+            if d.code == "merged_exit_type_mismatch"
+        ]
+        assert len(warnings) == 1
+        w = warnings[0]
+        assert w.severity == "warning"
+        assert w.flow_id == "f"
+        assert w.detail["exit_name"] == "invalid"
+        assert sorted(w.detail["contributing_nodes"]) == ["check_a", "check_b"]
+        assert sorted(w.detail["types"]) == ["mymod.TypeA", "mymod.TypeB"]
+
+    def test_runtime_terminates_at_inferred_public_exit(self, tmp_path):
+        """An unconnected source handle is a public exit; the runtime
+        terminates there rather than raising 'no outgoing edge'."""
+        pkg_name = "ws_infer_run"
         pkg_root = tmp_path / pkg_name
         pkg_root.mkdir()
+        (pkg_root / "dagsmith.json").write_text(
+            json.dumps({"name": pkg_name, "version": "0.1.0"}), encoding="utf-8"
+        )
         (pkg_root / "__init__.py").write_text(
             "from dagsmith import load_workspace\n"
             "_workspace = load_workspace(__name__)\n",
             encoding="utf-8",
         )
-        (pkg_root / "dagsmith.json").write_text(
-            json.dumps({"name": pkg_name, "version": "0.1.0"}), encoding="utf-8"
-        )
         flow_dir = pkg_root / "f"
         flow_dir.mkdir()
         (flow_dir / "__init__.py").write_text("", encoding="utf-8")
+        (flow_dir / "impl.py").write_text(
+            "def echo(x):\n    return x\n", encoding="utf-8"
+        )
         (flow_dir / "flow.json").write_text(
             json.dumps(
                 {
                     "id": "f",
                     "input": "typing.Any",
-                    "entry_node": "leaf",
-                    "nodes": {"leaf": passthrough_node()},
+                    "entry_node": "only",
+                    "nodes": {
+                        "only": {
+                            "kind": "python",
+                            "ref": ".impl:echo",
+                            "input": "typing.Any",
+                            "exits": {"out": "typing.Any"},
+                        }
+                    },
                     "edges": [],
-                    "public_exits": {},
                 }
             ),
             encoding="utf-8",
@@ -465,14 +593,13 @@ class TestPermissiveShapeDiagnostics:
             for m in list(sys.modules):
                 if m == pkg_name or m.startswith(pkg_name + "."):
                     del sys.modules[m]
-            mod = importlib.import_module(pkg_name)
+            module = importlib.import_module(pkg_name)
         finally:
             if str(tmp_path) in sys.path:
                 sys.path.remove(str(tmp_path))
-        diags = mod._workspace.diagnostics
-        hits = [d for d in diags if d.code == "empty_public_exits"]
-        assert len(hits) == 1
-        assert hits[0].flow_id == "f"
+        result = module._workspace.flow("f")(42)
+        assert result.exit == "out"
+        assert result.value == 42
 
 
 class TestPermissiveStructuralDiagnostics:
@@ -508,9 +635,12 @@ class TestPermissiveStructuralDiagnostics:
             "ws_bad_exit",
             flows={
                 "f": {
-                    "nodes": {"a": passthrough_node()},
+                    "nodes": {
+                        "a": passthrough_node(),
+                        "b": passthrough_node(),
+                    },
                     "edges": [
-                        {"from_node": "a", "from_exit": "nope", "to_flow_exit": "out"}
+                        {"from_node": "a", "from_exit": "nope", "to_node": "b"}
                     ],
                     "entry_node": "a",
                 },
@@ -519,25 +649,6 @@ class TestPermissiveStructuralDiagnostics:
         hits = [d for d in mod._workspace.diagnostics if d.code == "unknown_edge_exit"]
         assert len(hits) == 1
         assert hits[0].detail["from_exit"] == "nope"
-
-    def test_unknown_public_exit_target_emits_diagnostic(
-        self, tmp_path, make_workspace, passthrough_node
-    ):
-        mod = make_workspace(
-            tmp_path,
-            "ws_bad_public_exit",
-            flows={
-                "f": {
-                    "nodes": {"a": passthrough_node()},
-                    "edges": [
-                        {"from_node": "a", "from_exit": "out", "to_flow_exit": "ghost"}
-                    ],
-                    "entry_node": "a",
-                },
-            },
-        )
-        hits = [d for d in mod._workspace.diagnostics if d.code == "dangling_edge_target"]
-        assert any(d.detail.get("to_flow_exit") == "ghost" for d in hits)
 
 
 class TestUnresolvableRefs:
@@ -559,9 +670,7 @@ class TestUnresolvableRefs:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "n", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "n",
                 },
             },
@@ -587,9 +696,7 @@ class TestUnresolvableRefs:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "n", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "n",
                 },
             },
@@ -612,9 +719,7 @@ class TestUnresolvableRefs:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "n", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "n",
                 },
             },
@@ -639,9 +744,7 @@ class TestUnresolvableRefs:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "n", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
+                    "edges": [],
                     "entry_node": "n",
                 },
             },
@@ -686,10 +789,7 @@ class TestUnresolvableRefs:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "n", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
-                    "public_exits": {"out": "typing.Any"},
+                    "edges": [],
                 }
             ),
             encoding="utf-8",
@@ -802,10 +902,7 @@ class TestTolerantLoad:
                             "exits": {"out": "typing.Any"},
                         }
                     },
-                    "edges": [
-                        {"from_node": "t", "from_exit": "out", "to_flow_exit": "out"}
-                    ],
-                    "public_exits": {"out": "typing.Any"},
+                    "edges": [],
                 }
             ),
             encoding="utf-8",
@@ -848,7 +945,6 @@ class TestTypeMismatchDiagnostics:
                     },
                     "edges": [
                         {"from_node": "a", "from_exit": "out", "to_node": "b"},
-                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
                     ],
                     "entry_node": "a",
                 },
@@ -879,7 +975,6 @@ class TestTypeMismatchDiagnostics:
                     },
                     "edges": [
                         {"from_node": "a", "from_exit": "out", "to_node": "b"},
-                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
                     ],
                     "entry_node": "a",
                 },
@@ -917,7 +1012,6 @@ class TestTypeMismatchDiagnostics:
                     },
                     "edges": [
                         {"from_node": "a", "from_exit": "out", "to_node": "b"},
-                        {"from_node": "b", "from_exit": "out", "to_flow_exit": "out"},
                     ],
                     "entry_node": "a",
                 },

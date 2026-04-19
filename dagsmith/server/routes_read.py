@@ -52,7 +52,6 @@ def build_flow_view(ws: Workspace, flow_id: str) -> FlowView:
             from_node=edge.from_node,
             from_exit=edge.from_exit,
             to_node=edge.to_node,
-            to_flow_exit=edge.to_flow_exit,
         )
         for edge in spec.edges
     ]
@@ -66,6 +65,10 @@ def build_flow_view(ws: Workspace, flow_id: str) -> FlowView:
     except HTTPException:
         layout_data = dict(spec.layout)
 
+    # Infer model (SPEC §12 line 425): public_exits is derived, stored on the
+    # loaded flow by the workspace loader. Not persisted to flow.json.
+    loaded_public_exits = dict(ws.public_exits(flow_id))
+
     return FlowView(
         id=spec.id,
         input_type=spec.input_type,
@@ -73,7 +76,7 @@ def build_flow_view(ws: Workspace, flow_id: str) -> FlowView:
         description=spec.description,
         nodes=nodes,
         edges=edges,
-        public_exits=dict(spec.public_exits),
+        public_exits=loaded_public_exits,
         layout=layout_data,
         diagnostics=[
             d.model_dump() for d in ws.diagnostics if d.flow_id == flow_id

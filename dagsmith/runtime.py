@@ -101,11 +101,13 @@ def _resolve_node_result(
     node_id: str,
     exits: Mapping[str, Any],
 ) -> tuple[str, Any]:
-    """Apply the routing rule: Emit -> selector -> default exit.
+    """Apply the routing rule: Emit -> selector -> single exit.
 
-    Raises `AmbiguousRoute` when a node with >1 declared exits returns a plain
-    value and has no selector. `flow_id`/`node_id`/`exits` build the exception
-    payload.
+    For a 0-exit plain-return node, route through the implicit `default_exit`
+    handle (SPEC §5). For a 1-exit node, route through that single declared
+    exit — whatever its name — so the Infer model's public exit name is
+    preserved. Raises `AmbiguousRoute` when a node with >1 declared exits
+    returns a plain value and has no selector.
     """
     if isinstance(raw, Emit):
         return raw.exit_name, raw.value
@@ -116,4 +118,7 @@ def _resolve_node_result(
         return chosen.strip(), raw
     if len(exits) > 1:
         raise AmbiguousRoute(flow_id=flow_id, node_id=node_id, exits=exits)
+    if len(exits) == 1:
+        (sole,) = exits.keys()
+        return sole, raw
     return default_exit, raw
