@@ -59,12 +59,14 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
     );
   }
 
-  const rawExits = data.exits && data.exits.length > 0 ? data.exits : ['out'];
-  // Apply layout order if provided, filtering to only valid exits
+  const rawExits = data.exits ?? [];
   const exits = data.exitOrder
     ? [...data.exitOrder.filter((e) => rawExits.includes(e)), ...rawExits.filter((e) => !data.exitOrder!.includes(e))]
     : rawExits;
-  const hasSwitcher = exits.length > 1;
+  // Switcher strip renders for ANY declared exit (1 or more). 0-exit nodes
+  // are pure-return: the returned value routes through an anonymous "out"
+  // handle with no pill. 1-exit is a real first-class case and deserves UI.
+  const hasSwitcher = exits.length >= 1;
 
   const severityClass = data.severity === 'blocking'
     ? 'wf-severity-blocking !border-red hover:!border-red'
@@ -189,7 +191,7 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
           <Handle
             type="source"
             position={Position.Bottom}
-            id={exits[0]}
+            id={exits[0] ?? 'out'}
             className={handleClass}
           />
         </>
