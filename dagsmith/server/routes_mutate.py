@@ -267,12 +267,13 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                     dirty = True
 
         # Apply exits dict (add/remove with edge cascade).
+        # Permissive posture (SPEC §3): empty exits is accepted as a shape;
+        # the `empty_exits` diagnostic (workspace.py) flags it on load, and
+        # the runtime raises at the point of violation. Do NOT reject here.
         if request.exits is not None:
             current_exits = node_entry.get("exits")
             if not isinstance(current_exits, dict):
                 current_exits = {}
-            if not request.exits:
-                raise HTTPException(status_code=400, detail="a node must have at least one exit")
             # Validate all new exit names.
             for exit_name in request.exits:
                 if not _IDENTIFIER_RE.match(exit_name):
