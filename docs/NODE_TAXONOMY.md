@@ -134,3 +134,50 @@ Declares how a flow gets invoked from outside in production: HTTP endpoint, cron
 - **Breakpoint** — pause execution at a node; inspect or mutate state before continuing. Visible on canvas (runtime-behavior-changing).
 - **Log** — emit structured log lines on every traversal without any code change. Editor-header only.
 - **Metric** — increment a counter or record a timing histogram at a named node. Editor-header only.
+
+---
+
+## Design thread: Start + Feeder + Storage composition
+
+*Open thread — not yet shipped.* Two observations that compose into a cleaner authoring loop for test data.
+
+### Start inherits from Feeder
+
+Today's `kind="start"` is a virtual sentinel: no attached data, runtime just passes the caller's payload through. A Start with a Feeder attached would do both jobs at once — trigger the chain AND hold a configured sample payload that fires when invoked without explicit input (e.g., "Run" from the sidebar without a paste-in-payload).
+
+User's framing:
+
+> *"wonder if start nodes could 'inherit' from feeder nodes, so they get the benefit of being able to pipe objects in while also being the trigger for starting the chain?"*
+
+Clean factoring: Feeder is still the same attachment shape (🧪 pill); Start is still the same node kind. Adding a Feeder to a Start is just attaching the pill to that node. Runtime precedence: explicit `run_flow(payload)` still wins; Feeder payload only fills in when no caller-supplied payload is present.
+
+Implications:
+- No IR change to Start beyond what already exists. `kind="start"` + optional `attachments.feeder` field.
+- Collapses the "Run" button's behavior: today it prompts for a payload or fails; with a Start-Feeder configured, it just runs with the feeder payload as the default.
+- Production `Invocation Endpoint` attachments (deferred) would typically attach to a Start too, forming a triple: Start + Feeder (dev) + Invocation Endpoint (prod). Same node, different attachments active in different contexts.
+
+### Feeder sources payloads from Storage
+
+Today's Feeder holds a **static** sample payload — the dev pastes JSON into it. For non-trivial test cases (randomized records, realistic edge cases, large fixtures) users end up writing external Python scripts that generate test data, then paste the output back into the Feeder. Round-trip is awkward.
+
+User's observation:
+
+> *"perhaps feeder nodes should have some relationship with storage nodes, because this would let you create chains whose purpose would be to generate test cases basically, but it could all be done inline and in python, without having to run external scripts then paste them into the feeder nodes."*
+
+Proposed direction: a Feeder can be configured to source its payload from a named Storage bucket instead of holding a literal value. Concretely:
+
+- **Generator flow**: a regular flow whose purpose is producing test fixtures. Runs via normal nodes (`faker`, property-based generators, fixtures from `conftest.py`, whatever). Its output node has a `Storage` attachment writing to bucket `test_cases/high_risk` (or whichever).
+- **Consumer flow**: the flow under test. Its Start node has a Feeder attached. The Feeder's config: "read one record from bucket `test_cases/high_risk`." Possibly with selection modes: random, round-robin, nth, latest, filter-by-predicate.
+- **Net effect**: test data generation is a first-class flow authoring activity. No external scripts. No paste cycles. The same Storage-attachment mechanism that supports replay (per the existing Storage section) supports test sourcing.
+
+This also blurs the production/test boundary in a useful way: a Storage bucket populated from real production runs can feed a Feeder for "re-run against real data," which is exactly the replay use case plus a Feeder indirection.
+
+### What needs to be decided before shipping
+
+- **Feeder payload schema**: static-literal vs Storage-reference vs both-available. Probably "both, via a tagged union in the attachment config."
+- **Storage addressing**: flat bucket names vs namespaced-per-workspace vs namespaced-per-flow. Tension between reusability and isolation.
+- **Storage record selection**: the Feeder needs a way to pick one record. Random? Latest? User-configurable predicate? Keep minimal at first — just "latest" — and extend.
+- **Cross-flow references**: can Flow A's Feeder read from a bucket written by Flow B? Almost certainly yes, but there's a discoverability question (how does the user find which buckets exist). UI needs a "Storage browser."
+- **Production behavior**: Feeders are dev-only. But a Feeder-sourced-from-Storage *could* be useful in prod as "use the last known good payload if upstream is down." Defer.
+
+Captured `2026-04-19` in the post-Phase-3 discussion. Not yet prioritized against EDITOR_MERGE work or other Phase 4+ items.

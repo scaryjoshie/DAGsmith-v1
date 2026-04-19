@@ -268,6 +268,18 @@ Explicit end/terminal nodes were removed. Leaf nodes (nodes with no outgoing edg
 
 A virtual Start node (explicit entry with a ▶ icon) is planned for flows that need a specific input shape injected before the first Python node runs. Not yet implemented.
 
+**Update 2026-04-19:** shipped in Phase 3 (commits `5aebd0e`, `fa9c69d`, `3e3bcfe`, `c8238e5`, `4904cc8`). `kind="start"` in the IR; `FlowSpec.entry_node` and `input_type` became `@computed_field` properties derived from the unique start node. Dedicated `StartNode` React Flow node type + `StartInspector` sibling component. See `SPEC.md §12 line 427` and `NODE_TAXONOMY.md` Start section.
+
+### Start + Feeder + Storage composition (design thread — 2026-04-19)
+
+Open thread captured during post-Phase-3 discussion. Two compositional moves that could meaningfully improve the test-data authoring loop:
+
+1. **Start inherits from Feeder.** Today's Start is a virtual sentinel; a Start with a Feeder attached would both trigger the chain AND hold a configured sample payload. Runs with no caller-supplied input fall back to the Feeder payload. Same Feeder attachment shape; no new IR.
+
+2. **Feeder sources payloads from Storage.** Today's Feeder holds a static JSON literal; if the dev needs generated/randomized test cases they write an external Python script and paste the output back. A Feeder that reads from a named Storage bucket instead makes test-data generation a first-class flow activity — generator flows produce fixtures, consumer flows' Feeders pull from the same bucket. Also naturally unlocks "replay against real data" because the mechanism is the same.
+
+User's framings preserved verbatim in `NODE_TAXONOMY.md` (see "Design thread: Start + Feeder + Storage composition"). Open questions: payload-config schema (static vs Storage-ref vs both), Storage addressing and namespacing, record-selection policy (random/latest/predicate), cross-flow bucket sharing, production behavior. Not yet prioritized against EDITOR_MERGE or other Phase 4+ work.
+
 ---
 
 ## Known limitations
