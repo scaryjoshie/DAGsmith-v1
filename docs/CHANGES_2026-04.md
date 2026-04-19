@@ -336,3 +336,124 @@ The branch is `feat/subflows-chains-ui`. Backend tests: `uv run pytest -q` (116 
 7. **Activity bar sidebar** — swap current stacked sidebar for VS Code-style icon strip. Specified in `SIDEBAR.md`.
 8. **M7 drag-and-drop types** — types palette drag targets (node input, exit port, edge). Per original `SPEC.md`.
 9. **M8 group folding + Playwright baseline** — per original `SPEC.md`.
+
+---
+
+## Handoff 2026-04-19 (post-Phase-3, post-Storage-thread)
+
+This supersedes the earlier handoff section above. Read this one if you're picking up the project fresh.
+
+### Current state
+
+- **Branch**: `main`. Working tree clean. Local main = `origin/main`.
+- **Tip commit**: `1720c84` (latest at handoff time — `git log --oneline -1` for current).
+- **Tests**: `uv run pytest -q` → 123 passing.
+- **Frontend build**: `npm run build --prefix frontend` → green.
+- **Lint**: 14 pre-existing problems (React Hooks rules + setState-in-effect). Not introduced this session; predates Tailwind migration. Easy follow-up PR.
+- **Dev servers** (none auto-started; spin up as needed):
+  - Backend: `uv run dagsmith ui examples.customer examples.minimal` → port 8001. **No auto-reload** — restart required after any `dagsmith/` change.
+  - Frontend: `cd frontend && npm run dev` → typically port 5173 (Vite picks next available; previous sessions ended up on 5177-5178).
+- **Playwright session**: opens fresh. Earlier sessions used `-s=tw` as the persistent session name; not load-bearing.
+
+### What this session shipped
+
+1. **Tailwind v4 migration** — 14 components ported from CSS Modules to utilities, full `@theme` token bridge (`surface-*`, `ink-*`, `line-*`, semantic colors, font/text/radius scales), vendor-overrides pattern for library chrome. Color consolidation (3 reds → 1, 3 ambers → 2 named + new `--green`, dropped `--accent` and `--selection`).
+2. **0-exit plain-return as first-class** — backend allows it, runtime routes via implicit `"out"` exit, frontend AddNodeDialog defaults to `exits: {}`, snap accepts 0-exit sources, 1-exit shows pill. The whole "nodes can declare zero exits" story.
+3. **Phase 2: Infer model + leaf cue** — dropped `FlowSpec.public_exits` and `EdgeSpec.to_flow_exit`. Public exits derived from unconnected source handles (with merge-by-name semantics for shared exit names). Runtime terminates at inferred leaves instead of raising. Terminal dashed nodes removed. Chevron `▾` cue on leaf source handles.
+4. **Phase 3: Start node ▶** — `NodeSpec.kind="start"`, `FlowSpec.entry_node` and `input_type` are `@computed_field` derived from the unique start. `StartNode` as its own React Flow node type. `StartInspector` as sibling component (Inspector untouched). Delete-protected, snap-source-eligible.
+5. **Repo cleanup** — deleted `mockup/`, 3 historical `docs/UX_*.md` files, `docs/AUDIT_2026-04.md`. Retired `feat/subflows-chains-ui` and `feat/tailwind-migration` branches (local + remote). Rewrote `CLAUDE.md` (73 → 39 lines). Scoped `.gitignore`: dropped blanket `*.png`, added `screenshots/` convention.
+6. **Storage design thread** — three rounds of refinement captured in `docs/NODE_TAXONOMY.md` ("Design thread: Start + Feeder + Storage composition"). Concrete enough to implement; details still negotiable. Core invariant: **store state, let rows play back**.
+
+### Critical conventions and gotchas
+
+#### User stance — load-bearing
+
+> *"All of this stuff is just examples to draft and visualize while we're developing this live. And so there's no need for you to think about backwards compatibility. We are making the compatibility right right now. So you just experiment break things. When things break, rewrite them."*
+
+**No migration code, no legacy tolerance, no compat shims.** When schema changes, rewrite the example flow.json files by hand and rewrite tests. The only consumers are these examples; they're drafts.
+
+#### Permissive posture (SPEC §3) — load-bearing too
+
+Backend accepts any shape and emits diagnostics. Runtime raises at the point of violation. **Never add a validator that rejects a semantic violation** — emit a `Diagnostic` instead. The single allowed structural reject is start-node deletion (sentinel cannot be removed via API), and that's documented as exceptional.
+
+#### Tailwind v4 cascade gotchas (real, learned the hard way)
+
+- **`@layer base` wins for `!important`** vs unlayered styles. Per CSS Cascade L5, layered `!important` from an early layer beats unlayered `!important`. We use this in `vendor-overrides.css` to override Dockview's unlayered defaults.
+- **`text-*` utilities bundle line-heights** by default. Without `--text-*--line-height: normal` in `@theme`, every `text-sm` injects a line-height that cascades over inherited values. We override all four sizes.
+- **`--spacing` is rem-based by default**; with html font-size 13px, `p-3` renders as 9.75px not 12px. We pin `--spacing: 4px` absolute in `@theme`.
+- **CodeMirror `theme="dark"` injects `#282c34`** at the same specificity as our `.cm-editor` rule. Use `!important` (in @layer base) to win.
+- **DockviewReact auto-applies `.dockview-theme-abyss`** as an inner wrapper inside our `.dagsmith-theme`. CSS variable inheritance cascades by DOM proximity, so the inner abyss vars beat outer overrides at normal priority. Solution: scope var overrides to BOTH wrappers, plus `!important` on the variables that conflict (e.g., `--dv-separator-border`).
+- **React Flow `<Handle>` children inherit `!opacity-0`** in idle state. To render decorations on a handle (we use this for the leaf chevron), render as a SIBLING of `<Handle>` inside a `position: relative` parent.
+
+#### Backend dev workflow
+
+- Backend has no auto-reload. After ANY `dagsmith/` edit you must `lsof -ti:8001 | xargs kill && uv run dagsmith ui examples.customer examples.minimal &`.
+- The live backend writes mutations to `flow.json` files. **Mid-session UI testing will modify the example flow.json files.** `git checkout HEAD -- examples/*/flow.json` before committing if you didn't intend the drift.
+- Test fixtures use `_write_flow` and `_flow` helpers in `tests/conftest.py` and `tests/test_runner.py`. They auto-prepend a `_start` sentinel node to any flow that doesn't define one — so existing tests don't need to know about start-node ceremony. Keep this convention if you add helpers.
+
+### Where things live
+
+| What | Where |
+|---|---|
+| Live SPEC for scope | `docs/SPEC.md` (esp. §3 permissive, §5 runtime, §12 design decisions) |
+| Project philosophy | `docs/CORE_MODEL.md` + `docs/DESIGN.md` |
+| Living session log | `docs/CHANGES_2026-04.md` (this file) |
+| Forward UI design | `docs/EDITOR_MERGE.md` |
+| Node + attachment model + Storage spec | `docs/NODE_TAXONOMY.md` |
+| Sticky notes (planned) | `docs/ANNOTATIONS.md` |
+| Activity-bar sidebar (planned) | `docs/SIDEBAR.md` |
+| Agent conventions / dev loop | `CLAUDE.md` |
+
+### Agent-team workflow that worked this session
+
+The pattern that landed Phase 2 + Phase 3 cleanly:
+
+1. **Plan agent** (single, `Plan` subagent_type) produces a v1 plan document.
+2. **3 reviewers** in parallel (`general-purpose` agents): backend, frontend, spec-adherence. Each gets the plan + a focused prompt. Independent critiques.
+3. **Team-lead consolidates critiques** and sends back to Plan agent via SendMessage for v2 (planner stays warm).
+4. **Implementation team** (`TeamCreate` + spawn `migrator` + `verifier` via `Agent` with `team_name`). Migrator does work, pings verifier per task, commits when verifier clears.
+5. **Verifier was flaky this session** — team-lead stepped in directly multiple times. If verifier fails to respond to "please verify" within a few seconds, just have the migrator route to team-lead. Don't keep flipping back and forth.
+6. **One commit per task** is the default rule, but **fold tightly-coupled tasks** (e.g., dropping a field + the runtime change that depends on it) into one commit even if tasks were split. Tests-green-at-every-boundary is the harder constraint.
+
+### Recommended next steps (user direction at handoff)
+
+User explicitly wants frontend polish + the preview-tab UX, NOT functionality work. Two passes proposed and approved-in-principle:
+
+#### Pass A — visual / code-quality cleanup (no functional change)
+
+1. **Fix the 14 pre-existing lint errors** (React Hooks rules + setState-in-effect). Touches `App.tsx`, `FlowGraph.tsx`, `Inspector.tsx`, `SourceTab.tsx`, `FlowPanel.tsx`. Each is a focused fix.
+2. **Collapse `:root` vars into `@theme inline` directly** — currently we have `:root { --bg-0: #000 }` and `@theme { --color-surface-0: var(--bg-0) }`. The two-step indirection is vestigial; move literal values into `@theme` and drop `:root`. One source of truth for color values.
+3. **Promote 2 repeated shadow patterns to tokens**: `shadow-[0_4px_16px_rgba(0,0,0,0.5)]` (Toast) and `shadow-[0_12px_40px_rgba(0,0,0,0.5)]` (modals) → `--shadow-sm` and `--shadow-lg`. Replace 4-5 arbitrary literals.
+4. **Sweep for dead code**: any leftover branches from the migration (variant fields, etc.) that the IDE shows as "unused but exported."
+
+Pass A is low-risk and high-quality-of-life. ~4-6 small commits.
+
+#### Pass B — preview-tab behavior (the easy slice of EDITOR_MERGE)
+
+Implements the click-a-node → preview tab UX without touching the Inspector dissolution (which is the heavy part of EDITOR_MERGE proper).
+
+- Single-click a node → opens its source as a **preview tab** (italic title, Dockview supports this)
+- Single-click a different node → preview tab is **replaced** in-place (not accumulated)
+- Double-click node OR modify the source → preview becomes a permanent tab
+- If only the flow tab is open → auto-split right and place preview there
+- The existing "Open source →" button still creates permanent tabs directly
+
+Implementation surface: `DockviewCanvas.tsx` + `FlowPanel.tsx` + a small `previewPanelId` state ref. Inspector untouched. ~150-250 lines of focused diff.
+
+Skip in this round: Inspector → tab header dissolution, attachment pills, `@exits`/`emit()` runtime, Storage v1.
+
+### What NOT to do
+
+- Don't touch Inspector.tsx unless you're ready to dissolve it into the tab header (full EDITOR_MERGE — bigger commitment).
+- Don't ship Storage yet — design thread is concrete in NODE_TAXONOMY but actual implementation is a separate effort.
+- Don't add migration code or compat shims for any IR change — user has explicitly disclaimed compat needs.
+- Don't add `*.png` to .gitignore as a blanket rule — we deliberately scoped it to `screenshots/` so legitimate PNG assets can be tracked.
+
+### Storage thread reading order (if/when you implement)
+
+`docs/NODE_TAXONOMY.md` → "Design thread: Start + Feeder + Storage composition" section. Three "Update" subsections in order:
+1. Initial capture: Start inherits from Feeder; Feeder reads from Storage.
+2. Unification + serialization: collapse Feeder into Storage; hybrid SQLite-metadata + file-refs sketched.
+3. **Two substrates + pickle-BLOB model** (most current): ObjectStore + SQLStore, pickle BLOBs inline in SQLite (no file-refs in v1), playable rows as the core invariant, concrete v1 sketch with API surface, open questions enumerated.
+
+Read all three in order; the third reflects the latest user thinking and is the closest to implementable.
