@@ -202,9 +202,13 @@ function FlowGraphInner({
       for (const candidate of pool) {
         if (candidate.id === draggedId) continue;
         if (candidate.id.startsWith('exit:')) continue;
-        const exits = candidate.data.exits;
-        if (!exits || exits.length !== 1) continue;
-        const exitName = exits[0];
+        // Snap eligibility: source must have 0 or 1 exit. 0-exit nodes use the
+        // implicit "out" handle (SPEC §5); 1-exit nodes use their declared
+        // exit. Multi-exit nodes can't be snap sources since the chain's
+        // routing is ambiguous.
+        const exits = candidate.data.exits ?? [];
+        if (exits.length > 1) continue;
+        const exitName = exits[0] ?? 'out';
         const boundEdge = flow.edges.find(
           (e) => e.from_node === candidate.id && e.from_exit === exitName,
         );
@@ -248,9 +252,11 @@ function FlowGraphInner({
                 const parentId = queue.shift()!;
                 const parent = byId.get(parentId);
                 if (!parent) continue;
-                const exits = parent.data.exits;
-                if (!exits || exits.length !== 1) continue;
-                const exitName = exits[0];
+                // Chain follows snap-eligible edges: 0 or 1 exit (same rule
+                // as findSnapCandidate). 0-exit → implicit "out".
+                const exits = parent.data.exits ?? [];
+                if (exits.length > 1) continue;
+                const exitName = exits[0] ?? 'out';
                 const boundEdge = flow.edges.find(
                   (e) => e.from_node === parentId && e.from_exit === exitName,
                 );

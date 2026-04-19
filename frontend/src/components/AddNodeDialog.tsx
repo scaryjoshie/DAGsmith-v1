@@ -38,11 +38,16 @@ export function AddNodeDialog({
     if (!trimmed) return;
     setSubmitting(true);
     setError(null);
+    // New nodes default to plain-return (0 declared exits). The runtime
+    // routes the return value through the implicit "out" handle per SPEC §5.
+    // Users can add named exits later via the Inspector if they want emit-
+    // based multi-exit routing. Avoids forcing an alias ("out") on single-
+    // return nodes that don't need one.
     const payload: AddNodePayload = {
       name: trimmed,
       ref: '',
       input: 'typing.Any',
-      exits: { out: 'typing.Any' },
+      exits: {},
       selector: null,
       create_stub: true,
     };
