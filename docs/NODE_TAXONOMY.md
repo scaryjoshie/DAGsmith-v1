@@ -181,3 +181,52 @@ This also blurs the production/test boundary in a useful way: a Storage bucket p
 - **Production behavior**: Feeders are dev-only. But a Feeder-sourced-from-Storage *could* be useful in prod as "use the last known good payload if upstream is down." Defer.
 
 Captured `2026-04-19` in the post-Phase-3 discussion. Not yet prioritized against EDITOR_MERGE work or other Phase 4+ items.
+
+### Update — unification + serialization tension (2026-04-19, same session)
+
+Follow-on refinement: maybe Feeder isn't a separate attachment concept at all. **Storage units *are* the feeders.** The UI affordance is "choose which Storage option you want to pipe in," and that's the whole Feeder API. One concept instead of two.
+
+User's framing:
+
+> *"Could be the case that storage units are feeders, and you choose which storage option you want to pipe in?"*
+
+This also settles the write-side question that was dangling: Feeders are **read-only consumers**, not producers. Storage attachments on regular nodes are the only write path. User:
+
+> *"having feeders read from storage is nice, having feeders store things would be more undefined/dispersed probably."*
+
+So the shape becomes:
+
+- **Storage attachment (on a regular node)**: WRITE side. Every traversal of the node's exit persists a record to a named bucket.
+- **"Feeder" (on a Start node)**: READ side. Points at a named Storage bucket; at invocation time, pulls one record and pipes it in as the flow input. May not even need a distinct pill — could just be the Storage pill in a "source" mode, or a single pill that picks direction by context (Start → read, regular node → write).
+
+One concept, two roles picked by where it's attached. Much cleaner than a separate Feeder type.
+
+### Serialization tension: Pydantic ↔ SQLite ↔ logs
+
+Storage needs to persist `{exit, payload, timestamp}`. The payload is typically a Pydantic model. Two competing constraints:
+
+User's framing:
+
+> *"pydantic types are not super compatible with sqlite by default, maybe we will do pickles + file refs, but I also want logging to be able to benefit from sqlite, so unless we can come up with something absolutely genius may still need some sort of adapter between storage units and the node itself."*
+
+- **Structured payloads** (Pydantic models, possibly deep/nested/union-typed) don't map cleanly to SQLite columns. Faithful round-trip likely requires pickle (or `model_dump_json()` if the user is happy with JSON-only) + file-ref storage. Binary blob per record, metadata row in SQLite indexing it.
+- **Structured logs** (timestamp, level, node, edge, flow, trace id, etc.) are exactly what SQLite is good at — predictable columns, indexable, queryable via SQL.
+
+Proposed direction — a **hybrid**:
+- SQLite holds the metadata row per stored record: `(bucket, id, timestamp, exit_name, flow_id, node_id, type_ref, payload_ref)`. `payload_ref` is either `inline:<json>` for small/simple payloads or `file:<path>` for pickled blobs.
+- On read: query SQLite for the matching record, resolve the payload_ref.
+- Logs ride on the same SQLite DB (different tables) and get full query power.
+
+Alternative: push the serialization decision down to the Storage attachment's config — "JSON only," "pickle blobs," "JSON with fallback to pickle." Let the user pick per-bucket based on what they're storing.
+
+Either way, an **adapter layer between the Storage bucket and the node** is likely inescapable — the node emits a typed Pydantic value, the bucket stores bytes with metadata, and the Feeder (when it reads back) needs to reconstruct the typed value. Type reconstruction requires the `type_ref` to be recorded at write time and looked up at read time — which is exactly what `NodeSpec.exits[name]` already carries. So the adapter has a clean source of truth.
+
+### Net shape after this refinement
+
+- **Storage** is the single attachment. Present on any node (regular or Start).
+- Attached to a regular node → WRITE mode: persist each `(exit, payload)` to a bucket.
+- Attached to a Start node → READ mode (aka "Feeder" in the old vocabulary): at invocation, pull a record from a bucket and use its payload as the flow input.
+- **No separate Feeder attachment.** The old Feeder-as-static-literal becomes "a bucket with one manually-inserted record," which is odd — so either keep a *lightweight* static-payload mode as a quality-of-life shortcut, or lean into always-use-a-bucket and ship a "paste-to-bucket" editor UI.
+- **Adapter layer** between the node's typed value and the bucket's stored bytes. Uses `NodeSpec.exits[name]` as the type_ref for reconstruction. Serialization backend is hybrid: SQLite for metadata + indexing + logs, file-refs for pickled payloads when JSON-only doesn't round-trip.
+
+Captured `2026-04-19`. Still pre-shipping; pushes the design closer to concrete but leaves the "genius serialization idea" seat open.
