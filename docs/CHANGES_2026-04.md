@@ -119,6 +119,51 @@ The snap-stacking visual fusion (shared border between stacked nodes) had a doub
 
 SPEC.md updated: M5 and M6 marked complete with accurate descriptions, §9.5 added covering the full 2026-04 redesign work, §12 extended with the session's design decisions. Archive headers added to three superseded docs (`UI_FEATURES.md`, `UX_REDESIGN.md`, `UX_REDESIGN_visual.md`).
 
+### Tailwind CSS v4 migration (`731ab49` … `801561c`, plus `30df82a` prune)
+
+Ported all 14 frontend components from CSS Modules to Tailwind CSS v4 utilities over 16 commits. Zero `.module.css` files remain in `frontend/src/`. Visual state is pixel-identical to pre-migration — the Vercel dark aesthetic preserved verbatim. Also consolidated the color palette and pruned several superseded drafting docs + the throwaway `mockup/` tree.
+
+**Why**: app is about to grow substantially (subflows, chains, inspector expansion, command palettes). At ~20 components with 1,900 lines of CSS Modules, scaling to ~60 would have made file-hopping painful. Tailwind utility-first is the modern "clean product" stack for a pro-code IDE tool; prerequisite for eventually adopting shadcn/ui-style primitives.
+
+**Design discipline**: preserve look exactly. Every CSS rule was translated 1:1 to Tailwind utilities backed by a `@theme inline` bridge against the existing `:root` vars. Non-tokenized values (specific shadows, exact pixel padding) used arbitrary `[bracket]` syntax to keep pixels verbatim.
+
+**Foundation fixes caught on the Toast pilot** (`eec5b5b`), before scaling to 13 more components:
+- Unlayered `* { padding: 0 }` was stomping every Tailwind padding utility silently — wrapped all global CSS in `@layer base` so utilities (in `@layer utilities`, a later cascade layer) win.
+- `text-*` utilities were bundling unwanted line-heights (Tailwind v4 default ties line-height to font-size) — set `--text-*--line-height: normal` to preserve inherited browser-normal line-heights.
+- `--spacing: 0.25rem` rendered as 3.25px because html font-size is 13px, making `p-3` = 9.75px instead of 12px — pinned `--spacing: 4px` absolute so the familiar 4/8/12/16 step sizing holds regardless of font-size.
+
+**Vendor boundaries**: `src/vendor-overrides.css` holds four library-scoped blocks (CodeMirror, React Flow, Dockview chrome, Dockview tabs), each under a component-specific wrapper class (`.source-tab-editor`, `.flow-graph-canvas`, `.wf-process` / `.wf-terminal`, `.dagsmith-theme`). All rules wrapped in `@layer base` for consistent `!important` cascade priority (per CSS Cascade L5, earlier-declared layer wins for `!important`).
+
+**Color consolidation** (`cf8c08b`, `801561c`):
+- Three reds → one `--red: #e5484d`. Dropped `--severity-blocking` token + orphan `#e05252` hex literal.
+- Two ambers kept by semantic role: `--amber: #f59e0b` (bright, for node borders + decoration) and `--amber-muted: #d97706` (darker, for small diagnostic indicators where bright amber would be visually loud at 4×4 px). Dropped `--severity-warning`.
+- Added `--green: #4caf50` for the "✓ No issues" marker.
+- Removed dead `--accent` token (defined, referenced nowhere).
+- Merged `--selection` into `--blue: #3b82f6` (Tailwind blue-500 replaces the old Vercel blue `#0070f3`). One blue for both focus accents and selection state.
+- Dormant Dockview `.dv-tab.active-tab` rule (wrong class name `active-tab` vs the actual `dv-active-tab`; never fired in production) removed.
+
+**Gotchas worth remembering**:
+- Tailwind's `break-words` isn't equivalent to `word-break: break-word` (the utility only breaks at word boundaries); use the arbitrary `[word-break:break-word]` to preserve aggressive mid-token wrap.
+- Tailwind v4 utilities sit in a single cascade bucket where source-order in the generated stylesheet wins — NOT class-string order on the element. If a shared base constant includes a color/utility that variants need to swap, the variant may silently lose. Set color/utility per call site, not in a shared base.
+- Preflight sets `svg { display: block }` which breaks library icon-next-to-text markup (Dockview tabs). Restore `display: inline-block` on targeted selectors in vendor-overrides.
+- Tokens survive migration if you reference them via `@theme inline` (values embed directly). Without `inline`, variable chains may not resolve.
+
+**Token palette (final)**:
+
+| Category | Tokens |
+|---|---|
+| Surfaces | `surface-0..3`, `surface-hover` |
+| Text / icons | `ink-0..3` |
+| Borders | `line-0..2` |
+| Semantic | `blue`, `red`, `amber`, `amber-muted`, `green` |
+| Radii | `none`, `xs`, `sm` |
+| Fonts | `mono`, `sans` |
+| Text sizes | `xs`, `sm`, `md`, `lg` |
+
+**Verification**: each component port paired with a verifier pass (visual diff against baseline screenshots + computed-style spot checks). Three real bugs caught pre-commit: RunPanel word-break semantic mismatch, LeftSidebar chevron class-order bug, WorkflowNode severity+selection conflict. Post-merge interactive walkthrough (10 flows: load, selection, inspector, dialogs, editor, toast, preflight, tabs, delete-cancel) verdict: "Looks solid, OK to ship."
+
+**Prune pass** (`30df82a`): removed `mockup/` (throwaway SPEC-drafting tree, per its own README), four superseded `docs/*.md` files (`UI_FEATURES.md`, `UX_REDESIGN.md`, `UX_REDESIGN_visual.md` explicitly self-labeled "Historical"; `AUDIT_2026-04.md` a point-in-time snapshot). Dropped `.gitignore`'s blanket `*.png` rule in favor of a scoped `/screenshots/` convention so legitimate PNG assets (favicons, illustrations) can be tracked (`a9a2d78`).
+
 ---
 
 ## Design decisions
