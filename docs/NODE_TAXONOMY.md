@@ -230,3 +230,139 @@ Either way, an **adapter layer between the Storage bucket and the node** is like
 - **Adapter layer** between the node's typed value and the bucket's stored bytes. Uses `NodeSpec.exits[name]` as the type_ref for reconstruction. Serialization backend is hybrid: SQLite for metadata + indexing + logs, file-refs for pickled payloads when JSON-only doesn't round-trip.
 
 Captured `2026-04-19`. Still pre-shipping; pushes the design closer to concrete but leaves the "genius serialization idea" seat open.
+
+### Update — two substrates + pickle-BLOB model (2026-04-19, same session)
+
+Third round of refinement. The thread has collapsed into a concrete-enough shape that someone could implement it. Details will change; the core idea is stable.
+
+#### The core idea
+
+**Store state. Let rows play back.** A storage unit persists payloads from flow runs. Every stored row is independently playable — click it, it seeds a flow invocation. That single move unifies three concerns into one mechanism:
+
+- **Test fixtures** — rows authored by a generator flow or hand-curated, browsable via the UI, clickable to invoke the flow under test
+- **Replay / debugging** — rows captured from production runs via a Storage write-attachment, clickable to reproduce failures
+- **Dev interactive loop** — rows from prior runs available as "last known good input" without copy-paste
+
+User's framing:
+
+> *"rows of the database are fully playable (as in they alone, as well as manual injection, serve as the ways to start the pipeline)"*
+
+A bucket browser in the UI exposes rows with a ▶ play affordance; combined with Start-node attachment, playing a row is equivalent to calling `run_flow(payload)` with the row's content. The previously-planned `Feeder` concept collapses entirely into "a Start node pointing at a Storage bucket."
+
+#### Two substrates
+
+- **ObjectStore** — the typed bucket store. Payloads are Pydantic-model (or arbitrary Python object) instances; round-trip is via pickle. Typed buckets: each bucket declares a `type_ref` on creation, writes validate, reads return that type. Primary substrate for flow plumbing (write-attachment on regular nodes, read-attachment on Start nodes). Playable.
+
+- **SQLStore** — arbitrary user-defined tables accessed via Python's native `sqlite3` / SQLAlchemy / etc. Intentionally unconnected from the typed-bucket abstraction. Primary home for logs (the planned `Log` attachment writes here) and analytics queries.
+
+  User's clarification:
+
+  > *"my intention was for SQL storage to mainly be for use during dev testing. we'd want to find a way to remove the portions of the flows that are only for dev testing when pushing to prod."*
+
+  SQLStore is dev-only by intent. If a user wants to feed SQL rows back into a flow they can write an adapter, but that's opt-in; the default shape is "SQL rows stay in SQL."
+
+Both substrates share a single SQLite database file (`<workspace>/.dagsmith/store.db` or similar). ObjectStore uses a single conventional `object_store` table; SQLStore uses arbitrary user tables in the same DB.
+
+#### ObjectStore schema (pickle BLOB inline, no file-refs)
+
+```
+object_store(
+  id INTEGER PRIMARY KEY,
+  bucket TEXT,
+  timestamp REAL,
+  type_ref TEXT,         -- canonical type for reconstruction (same shape as NodeSpec.exits[name])
+  display_json TEXT,     -- JSON-nickname for bucket-browser preview; fallback to repr() if not JSON-serializable
+  payload BLOB,          -- pickle bytes, inline
+  pointer_refs JSON      -- nullable; list of object_store.id references for compound rows
+)
+```
+
+User's framing on the write model:
+
+> *"honestly it's not too difficult to store as a pickle object (and still make it so that you can store all your objects across the project in one SQLite database). the idea is that you'd store either a json list of pointer refs to pickle objects, or store the ref to a pickle object which is a tuple."*
+
+Rationale for BLOB-inline over pickle-files-on-disk:
+
+- **Small payload regime.** DAGsmith's expected payload sizes (test cases, replay records) are 1–10 KB pickled, with compound rows reaching maybe 100 KB. SQLite handles this range in single-digit microseconds per read.
+- **Operational simplicity.** One file per workspace. No orphan file GC. Atomic insert in one WAL commit. Backups and `git-LFS`-able moves trivial.
+- **Write overhead.** File-per-pickle incurs inode + dirent + fsync costs per record. SQLite WAL batches these.
+
+Deferred optimization: if a user stores very large payloads (>5 MB per record), introduce a file-tier — write to `<workspace>/.dagsmith/blobs/<sha256>.pkl` and store a tagged ref like `b"FILE:<path>"` in the `payload` column. The reader detects the tag and fetches accordingly. **Not in v1.** File-tier opens the door to orphan-file GC, which we don't want to solve until forced.
+
+#### Pointer refs — optional compositional shape
+
+Most rows: `pointer_refs` is NULL, `payload` is a single pickled value.
+
+Compound rows: `pointer_refs` is a JSON array of `object_store.id` values, each referencing another row. The top-level `payload` can be a pickled container (tuple, list, dict-by-key-string) whose elements ARE the referenced rows' payloads — or just a pickle of the composite structure directly with the pointer_refs acting as a dependency index.
+
+Use cases this enables:
+- Customer + orders + settings → one Test row referencing three payload rows
+- Multi-step run captures → one "run" row referencing the sequence of emitted values
+- Fixture composition → a Test row that references and combines smaller Fixture rows
+
+Consumer / adapter decides whether to traverse pointer_refs or treat the top-level payload as opaque.
+
+#### Single-column-per-row — topology concerns live in the graph
+
+Base case locked: **1 storage row = 1 payload = 1 type**. Multi-exit producers, multi-input consumers, fan-out consumers — all of that is the graph's job, not the store's.
+
+User's framing:
+
+> *"if a storage unit is by itself playable, what if it wanted to play into a function with multiple inputs, or play into multiple chains? then it might make sense for there to be multiple exits, although perhaps this is the point of an adapter, and the base case of 1 storage 1 col 1 var should hold?"*
+
+Resolution:
+- **Play into multiple chains** → fan-out from the Start node's outgoing handle. One payload, multiple downstream paths. Already supported by the edge model.
+- **Play into a multi-input function** → the future multi-param join feature (OPEN in CHANGES_2026-04.md) handles this in the consumer node, not the store. The store delivers one value; the join consumes from multiple upstreams (possibly multiple Storage buckets).
+- **Reshape before consumption** → write a normal Python adapter node downstream. Takes the typed value out, produces whatever the next node wants.
+
+Keeps the store simple and pushes complexity into graph topology, where it's already handled.
+
+#### Adapter layer — type transformation, not serialization
+
+Two concerns that should stay separate:
+
+- **Serialization**: `payload BLOB ↔ typed Python object`. Framework plumbing. User never writes it. Storage uses the `type_ref` column to reconstruct at read time.
+- **Transformation**: `bucket_type ↔ consumer_input_type`. User logic, only required when the bucket holds type `A` and the consumer expects type `B`. A normal Python node downstream of the Storage read-handle.
+
+When types match → no adapter, identity pipe.
+When types differ → user writes an adapter node (just a normal `kind="python"` node).
+
+The adapter isn't a special primitive. It's just the place in the graph where type transformation happens, named explicitly.
+
+#### Dev/prod separation (deferred, but flagged)
+
+User:
+
+> *"we'd want to find a way to remove the portions of the flows that are only for dev testing when pushing to prod."*
+
+Two proposed axes, for whenever packaging-for-prod becomes a real workflow:
+
+- **Per-flow flag**: `flow.dev_only: bool`. Whole flows (e.g., a generator flow that only exists to populate a test bucket) get excluded from prod packaging.
+- **Per-attachment scope**: `attachment.scope: "dev" | "prod" | "both"` (default `both` for most, `dev` for SQLStore-write attachments). Fine-grained control over which attachments fire in which environment.
+
+Initial implementation ignores this — assume "dev mode" is the only mode. Add the scope flags when a real prod-packaging path lands. Not a v1 blocker.
+
+#### What v1 looks like concretely
+
+A minimal shippable ObjectStore + playable rows:
+
+1. **Backend**: `dagsmith/store.py` with `ObjectStore` class managing `<workspace>/.dagsmith/store.db`. API: `write(bucket, payload, type_ref, display_json, pointer_refs=None)`, `read(bucket, id)`, `browse(bucket)`, `play(bucket, id) → triggers flow run`.
+2. **IR / attachment**: `NodeSpec.attachments.storage` optional field, records bucket name + direction (write on a regular node, read on a Start node).
+3. **Runtime**: on each traversal of a node with a write Storage attachment, persist `(exit, payload)` to the configured bucket. On invocation of a flow whose Start has a read Storage attachment + no explicit caller payload, pull latest (or selected) row and use as input.
+4. **UI**: a new Storage sidebar section listing buckets. Click a bucket → bucket browser (row list with display_json previews). Row row ▶ button → invokes flow with that row's payload. Storage pill on nodes when attachment present.
+5. **SQLStore** skipped in v1 — all that's needed for the playable-rows core is ObjectStore.
+
+#### The remaining open questions
+
+Still undecided (but not blocking a v1 start):
+
+- **Bucket namespacing**: flat-workspace-wide (one bucket per name) vs per-flow. Leans flat with a UI discovery layer.
+- **Record selection policy on read**: "latest" only in v1; later add random, round-robin, predicate.
+- **Bucket retention**: max-rows / max-age policy. Not v1; ship with unbounded, add knobs when someone needs them.
+- **Cross-workspace bucket sharing**: probably out of scope forever. One DB per workspace.
+- **Schema migration**: when the ObjectStore schema changes, existing rows handled how? Simplest: always recreate on schema version bump (dev tool, throwaway data). Re-evaluate if it ever becomes production state.
+- **Concurrency**: one SQLite writer at a time (it's an exclusive lock). Fine for interactive dev; might matter if production Storage writes are high-throughput. Defer.
+
+---
+
+Captured across three turns on 2026-04-19. The shape is concrete enough to start implementing, though details are all still negotiable. Core invariant: **rows are playable, and that drives the whole UX.**
