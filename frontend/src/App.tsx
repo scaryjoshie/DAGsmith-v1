@@ -7,6 +7,7 @@ import { LeftSidebar } from './components/LeftSidebar';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
 import { RunPreflightModal } from './components/RunPreflightModal';
 import { Inspector } from './components/Inspector';
+import { StartInspector } from './components/StartInspector';
 import { SelectionContext, type SelectedNode } from './SelectionContext';
 import type { DockviewApi } from 'dockview';
 import { getFlow, getWorkspace, listWorkspaces } from './api';
@@ -230,17 +231,30 @@ export default function App() {
     </>
   );
 
+  const selectedKind = selectedNode
+    ? activeFlowView?.nodes[selectedNode.nodeId]?.kind
+    : undefined;
+  const inspectorRefetch = () => {
+    if (activeFlow) handleFlowMutatedWithView(activeFlow.workspaceName, activeFlow.flowId);
+  };
   const inspector = selectedNode ? (
-    <Inspector
-      selectedNode={selectedNode}
-      flow={activeFlowView}
-      onOpenSource={handleOpenSource}
-      onDismiss={() => setSelectedNode(null)}
-      onNodeRenamed={handleNodeRenamed}
-      onFlowRefetch={() => {
-        if (activeFlow) handleFlowMutatedWithView(activeFlow.workspaceName, activeFlow.flowId);
-      }}
-    />
+    selectedKind === 'start' ? (
+      <StartInspector
+        selectedNode={selectedNode}
+        flow={activeFlowView}
+        onDismiss={() => setSelectedNode(null)}
+        onFlowRefetch={inspectorRefetch}
+      />
+    ) : (
+      <Inspector
+        selectedNode={selectedNode}
+        flow={activeFlowView}
+        onOpenSource={handleOpenSource}
+        onDismiss={() => setSelectedNode(null)}
+        onNodeRenamed={handleNodeRenamed}
+        onFlowRefetch={inspectorRefetch}
+      />
+    )
   ) : undefined;
 
   return (
