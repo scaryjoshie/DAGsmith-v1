@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type SerializedDockview } from 'dockview';
 import { FlowPanel, type FlowPanelParams } from '../panels/FlowPanel';
 import { SourcePanel } from '../panels/SourcePanel';
+import { NodeEditorPanel, NodeEditorTabHeader } from '../panels/NodeEditorPanel';
 import { FlowIcon, PythonIcon } from '../icons/BrandIcons';
 import type { WorkspaceView } from '../types';
 
@@ -48,6 +49,7 @@ function SourceTabHeader({ api }: IDockviewPanelHeaderProps) {
 const tabComponents = {
   flow: FlowTab,
   source: SourceTabHeader,
+  nodeEditor: NodeEditorTabHeader,
 };
 
 interface DockviewCanvasProps {
@@ -60,6 +62,7 @@ interface DockviewCanvasProps {
 const components = {
   flow: FlowPanel,
   source: SourcePanel,
+  nodeEditor: NodeEditorPanel,
 };
 
 const LAYOUT_KEY = (ws: string) => `dagsmith.dockview.${ws}`;
