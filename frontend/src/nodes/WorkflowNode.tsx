@@ -79,7 +79,7 @@ export function WorkflowNode({ data }: NodeProps<WorkflowNode>) {
     : '';
 
   const snappedAboveClass = data.snappedAbove ? 'rounded-b-none' : '';
-  const snappedBelowClass = data.snappedBelow ? 'rounded-t-none border-t-0' : '';
+  const snappedBelowClass = data.snappedBelow ? 'rounded-t-none' : '';
 
   const processClass = `${PROCESS_BASE} ${severityClass} ${snapTargetClass} ${snappedAboveClass} ${snappedBelowClass}`;
   const handleClass = isConnecting ? `${HANDLE_BASE} ${HANDLE_VISIBLE_EXTRA}` : HANDLE_BASE;

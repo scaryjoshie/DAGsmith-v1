@@ -25,7 +25,7 @@ export type StartNode = Node<StartNodeData, 'start'>;
 // `wf-start` class hook: parallels `.wf-process` for the
 // vendor-overrides.css selection-ring rule.
 const START_BASE =
-  'wf-start group relative flex min-w-[160px] items-center gap-3 rounded-xs border border-line-1 bg-surface-1 px-[18px] py-2 font-mono tracking-[-0.01em] text-ink-1 transition-[border-color] duration-100 ease-[ease] hover:border-line-2 hover:text-ink-0';
+  'wf-start group relative flex min-w-[160px] items-center gap-3 rounded-xs border border-green/60 bg-surface-1 px-[18px] py-2 font-mono tracking-[-0.01em] text-ink-1 transition-[border-color] duration-100 ease-[ease] hover:border-green hover:text-ink-0';
 
 const HANDLE_BASE =
   '!h-[7px] !w-[7px] !rounded-none !border !border-[var(--fg-2)] !bg-[var(--fg-2)] !opacity-0 transition-opacity duration-150 ease-[ease] group-hover:!opacity-100 hover:!bg-[var(--fg-0)] hover:!border-[var(--fg-0)]';
@@ -43,7 +43,7 @@ export function StartNode({ data }: NodeProps<StartNode>) {
 
   return (
     <div className={`${START_BASE} ${snapTargetClass}`}>
-      <span className="pointer-events-none text-ink-2 text-sm leading-none">▶</span>
+      <span className="pointer-events-none text-green text-sm leading-none">▶</span>
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs">
         {shortName(data.input_type)}
       </span>
