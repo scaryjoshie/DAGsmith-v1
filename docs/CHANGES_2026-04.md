@@ -457,3 +457,33 @@ Skip in this round: Inspector → tab header dissolution, attachment pills, `@ex
 3. **Two substrates + pickle-BLOB model** (most current): ObjectStore + SQLStore, pickle BLOBs inline in SQLite (no file-refs in v1), playable rows as the core invariant, concrete v1 sketch with API surface, open questions enumerated.
 
 Read all three in order; the third reflects the latest user thinking and is the closest to implementable.
+
+---
+
+## Editor-merge execution plan (agreed 2026-04-19)
+
+Replaces the earlier "Pass B first, merge later" split. Reasoning: a preview tab that only shows source is incoherent — the thing that pops up on node click is exactly what Inspector currently does. So we build the merged editor-tab (metadata header + source) with preview-tab mechanics in one coherent pass, keep Inspector rendering in the sidebar as a safety net, and retire it after parity is confirmed.
+
+### Decisions
+
+- **Commit split**: 6 commits, keep 5 and 6 separate (flag-off, then delete) for revert granularity.
+- **Editor read-only in v1**: CodeMirror stays `editable={false}`. Promotion-on-typing won't fire; OK to ship. Save wiring lands with the later code-as-truth phase.
+- **Header diagnostics**: inline list below EXITS. More horizontal room in the tab header than the sidebar — drop the badge+popover pattern; show the error list directly.
+- **Preview tab visual**: italic tab title (VS Code pattern). Dockview supports this via tab component params.
+- **Click disambiguation**: React Flow ships `onNodeDoubleClick` natively — separate handler, no timing hacks. Single-click = preview (ephemeral, non-active pane). Shift+click = persistent in active pane. Double-click = persistent in non-active pane.
+- **Dev-server state note**: Tailwind v4 on the currently-running :5175 is emitting 0 utility classes — needs a restart before any visual verification. Independent of this plan.
+
+### Commit sequence
+
+1. **Extract shared inspector field primitives** — move `EditField`, `ExitPill`, `AddExitRow`, and PATCH helpers from `Inspector.tsx` into `frontend/src/components/inspector/NodeFields.tsx`. Inspector re-imports; no behavior change. ~320 lines touched, net ~0.
+2. **Add `NodeEditorPanel`** — new `frontend/src/panels/NodeEditorPanel.tsx` composing `NodeFields` header over `<CodeMirror>`. Register as `components.nodeEditor` + a `NodeEditorTabHeader` with italic title when `params.preview === true`. Start-node variant uses `StartInspector`'s INPUT-TYPE-only field. No caller yet. ~120 lines.
+3. **Wire node selection to open `NodeEditorPanel`** — `openNodePreview(api, ws, flowId, nodeId)` in `DockviewCanvas`: finds and removes current preview, inserts new panel in non-active pane (auto-right-split if only one pane). Preview panel ID stable (`nodeEditor-preview:${ws}:${flowId}`). Single-click → preview; shift+click → persistent in active; `onNodeDoubleClick` → persistent in non-active; canvas deselect → preview closes. Inspector still co-renders. ~150 lines.
+4. **Promote preview on focus / type / dblclick** — CodeMirror `onUpdate` (if `update.docChanged`), outer container `onFocus`, dockview `panelApi.onDidActiveChange`. Promotion clears the preview ref and removes the italic. Gate with `mountedRef` so programmatic focus on mount doesn't instantly promote. ~50 lines.
+5. **Feature-flag Inspector sidebar off** — `INSPECTOR_IN_SIDEBAR = false` in `App.tsx`; sidebar no longer renders. All fields now edit via header through the same PATCH path. Delete key + Escape still wired; Escape clears selection which closes preview via step 3's logic. ~20 lines.
+6. **Delete Inspector, StartInspector, SourceTab, SourcePanel, old `source` panel type** — remove registrations in `DockviewCanvas`, fold `onNodeRenamed`/`handleOpenSource` into `NodeFields`. Strip `source:*` panel IDs from `loadLayout` so stale localStorage layouts don't reference a dead component. ~300 lines removed.
+
+### Open threads (do NOT implement yet)
+
+- **Context menus (custom right-click)**: nodes, edges, canvas, tabs each need bespoke context menus. Scope this as a separate thread after merge ships. Noted 2026-04-19 by user.
+- **Edit-and-save** for CodeMirror: deferred to the code-as-truth phase (§5 of `EDITOR_MERGE.md`) — requires re-introspection on save.
+- **Attachments, emit/return, multi-param**: per EDITOR_MERGE §3-§7, all deferred.
