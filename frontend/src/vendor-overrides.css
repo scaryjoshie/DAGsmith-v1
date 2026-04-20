@@ -58,6 +58,30 @@
     background: var(--bg-0) !important;
   }
 
+  /* CodeMirror scroller: VS Code-style rectangular scrollbar pinned to the
+   * editor edges. Overrides the default 8px rounded `.dagsmith-theme`
+   * scrollbar since the editor is a focal surface that benefits from a
+   * chunkier, unambiguously draggable handle. */
+  .source-tab-editor .cm-scroller::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  .source-tab-editor .cm-scroller::-webkit-scrollbar-track {
+    background: var(--bg-1);
+    border-radius: 0;
+  }
+  .source-tab-editor .cm-scroller::-webkit-scrollbar-thumb {
+    background: var(--border-2);
+    border-radius: 0;
+    border: 0;
+  }
+  .source-tab-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-3);
+  }
+  .source-tab-editor .cm-scroller::-webkit-scrollbar-corner {
+    background: var(--bg-1);
+  }
+
   /* FlowGraph: suppress React Flow's default selection outline — we render
    * our own focus ring via box-shadow on the inner node div in WorkflowNode. */
   .flow-graph-canvas .react-flow__node.selected {
