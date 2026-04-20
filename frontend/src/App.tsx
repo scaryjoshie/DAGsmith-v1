@@ -2,13 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import { AddNodeDialog } from './components/AddNodeDialog';
 import { Shell } from './components/Shell';
-import { DockviewCanvas, openFlowPanel } from './components/DockviewCanvas';
+import {
+  DockviewCanvas,
+  openFlowPanel,
+  openNodePreview,
+  openNodeEditorPersistent,
+  closeNodePreview,
+} from './components/DockviewCanvas';
 import { LeftSidebar } from './components/LeftSidebar';
 import { FloatingRunPanel } from './components/FloatingRunPanel';
 import { RunPreflightModal } from './components/RunPreflightModal';
 import { Inspector } from './components/Inspector';
 import { StartInspector } from './components/StartInspector';
-import { SelectionContext, type SelectedNode } from './SelectionContext';
+import { SelectionContext, type SelectedNode, type OpenEditorMode } from './SelectionContext';
 import type { DockviewApi } from 'dockview';
 import { getFlow, getWorkspace, listWorkspaces } from './api';
 import type { FlowView, WorkspaceView } from './types';
@@ -159,6 +165,28 @@ export default function App() {
     dockviewApiRef.current = api;
   }, []);
 
+  const handleOpenNodeEditor = useCallback((target: SelectedNode, mode: OpenEditorMode) => {
+    const api = dockviewApiRef.current;
+    if (!api) return;
+    const { workspaceName: ws, flowId, nodeId } = target;
+    if (mode === 'preview') {
+      openNodePreview(api, ws, flowId, nodeId);
+    } else if (mode === 'persistent-active') {
+      openNodeEditorPersistent(api, ws, flowId, nodeId, true);
+    } else {
+      closeNodePreview(api, ws, flowId);
+      openNodeEditorPersistent(api, ws, flowId, nodeId, false);
+    }
+  }, []);
+
+  // Close the preview panel when the user deselects (canvas click → null).
+  useEffect(() => {
+    if (selectedNode) return;
+    const api = dockviewApiRef.current;
+    if (!api || !activeFlow) return;
+    closeNodePreview(api, activeFlow.workspaceName, activeFlow.flowId);
+  }, [selectedNode, activeFlow]);
+
   const handleOpenSource = useCallback((nodeId: string, split: boolean) => {
     const api = dockviewApiRef.current;
     if (!api || !activeFlow) return;
@@ -258,7 +286,7 @@ export default function App() {
   ) : undefined;
 
   return (
-    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutatedWithView }}>
+    <SelectionContext.Provider value={{ selectedNode, onNodeSelect: handleNodeSelect, onFlowMutated: handleFlowMutatedWithView, onOpenNodeEditor: handleOpenNodeEditor }}>
       <Shell sidebarBody={sidebar} canvas={canvas} rightPanel={inspector} />
       {preflightOpen && activeFlow && activeFlowView && (
         <RunPreflightModal

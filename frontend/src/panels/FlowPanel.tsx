@@ -23,7 +23,7 @@ export interface FlowPanelParams {
 export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPanelParams>) {
   const { workspaceName, flowId } = params;
   const panelId = panelApi.id;
-  const { onNodeSelect } = useSelection();
+  const { onNodeSelect, onOpenNodeEditor } = useSelection();
   const [flow, setFlow] = useState<FlowView | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const pendingLayoutRef = useRef<LayoutPositions | null>(null);
@@ -165,6 +165,10 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
     onNodeSelect(nodeId ? { nodeId, flowId, workspaceName } : null);
   }, [onNodeSelect, flowId, workspaceName]);
 
+  const handleOpenNodeEditor = useCallback((nodeId: string, mode: 'preview' | 'persistent-active' | 'persistent-nonactive') => {
+    onOpenNodeEditor({ nodeId, flowId, workspaceName }, mode);
+  }, [onOpenNodeEditor, flowId, workspaceName]);
+
   if (!flow) {
     return (
       <div className="p-4 font-mono text-sm text-ink-2">
@@ -181,6 +185,7 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
       <FlowGraph
         flow={flow}
         onSelectNode={handleSelectNode}
+        onOpenNodeEditor={handleOpenNodeEditor}
         onConnect={handleConnect}
         onDeleteNode={handleDeleteNode}
         onDeleteEdge={handleDeleteEdge}

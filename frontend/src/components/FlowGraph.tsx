@@ -116,6 +116,7 @@ const viewportCache = new Map<string, Viewport>();
 interface FlowGraphProps {
   flow: FlowView;
   onSelectNode: (nodeId: string | null) => void;
+  onOpenNodeEditor?: (nodeId: string, mode: 'preview' | 'persistent-active' | 'persistent-nonactive') => void;
   onConnect: (connection: Connection) => void;
   onDeleteNode: (nodeId: string) => void;
   onDeleteEdge: (fromNode: string, fromExit: string) => void;
@@ -137,6 +138,7 @@ export function FlowGraph(props: FlowGraphProps) {
 function FlowGraphInner({
   flow,
   onSelectNode,
+  onOpenNodeEditor,
   onConnect,
   onDeleteNode,
   onDeleteEdge,
@@ -639,9 +641,17 @@ function FlowGraphInner({
               setSelectedEdgeId((prev) => prev === edge.id ? null : edge.id);
               onSelectNode(null);
             }}
-            onNodeClick={(_, node) => {
+            onNodeClick={(event, node) => {
               setSelectedEdgeId(null);
               onSelectNode(node.id);
+              if (event.shiftKey) {
+                onOpenNodeEditor?.(node.id, 'persistent-active');
+              } else {
+                onOpenNodeEditor?.(node.id, 'preview');
+              }
+            }}
+            onNodeDoubleClick={(_, node) => {
+              onOpenNodeEditor?.(node.id, 'persistent-nonactive');
             }}
             onPaneClick={() => {
               setSelectedEdgeId(null);

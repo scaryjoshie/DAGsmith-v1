@@ -147,6 +147,9 @@ export function DockviewCanvas({ workspaceName, workspace, onApiReady, onActiveP
     onApiReady?.(event.api);
 
     event.api.onDidActivePanelChange((panel) => {
+      // Only propagate when a flow panel becomes active. Node-editor/preview
+      // panel focus shouldn't override the "active flow" or clear selection.
+      if (panel && panel.view.contentComponent !== 'flow') return;
       onActivePanelChangeRef.current?.(panel ? (panel.params as FlowPanelParams) : null);
     });
 
@@ -200,4 +203,81 @@ export function openFlowPanel(api: DockviewApi, workspaceName: string, flowId: s
     title: flowId.split('.').pop() ?? flowId,
     params: { workspaceName, flowId } satisfies FlowPanelParams,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Node-editor panel helpers (preview + persistent). One preview slot per
+// flow, keyed by `nodeEditor-preview:<ws>:<flowId>`. Persistent panels are
+// keyed by `nodeEditor:<ws>:<flowId>:<nodeId>`.
+// ---------------------------------------------------------------------------
+
+function previewPanelId(ws: string, flowId: string): string {
+  return `nodeEditor-preview:${ws}:${flowId}`;
+}
+
+function persistentPanelId(ws: string, flowId: string, nodeId: string): string {
+  return `nodeEditor:${ws}:${flowId}:${nodeId}`;
+}
+
+// Pick the flow panel to reference when splitting. Prefer the active panel
+// if it belongs to this flow; otherwise any panel with this flowId.
+function flowReferencePanel(api: DockviewApi, flowId: string): string | undefined {
+  const active = api.activePanel;
+  if (active && (active.params as Partial<FlowPanelParams>)?.flowId === flowId && active.id === flowId) {
+    return active.id;
+  }
+  const flowPanel = api.panels.find((p) => p.id === flowId);
+  return flowPanel?.id;
+}
+
+export function openNodePreview(api: DockviewApi, workspaceName: string, flowId: string, nodeId: string): void {
+  const id = previewPanelId(workspaceName, flowId);
+  const existing = api.panels.find((p) => p.id === id);
+  if (existing) {
+    existing.api.updateParameters({ workspaceName, flowId, nodeId, preview: true });
+    existing.api.setTitle(nodeId);
+    return;
+  }
+  const ref = flowReferencePanel(api, flowId);
+  api.addPanel({
+    id,
+    component: 'nodeEditor',
+    tabComponent: 'nodeEditor',
+    title: nodeId,
+    params: { workspaceName, flowId, nodeId, preview: true },
+    position: ref ? { referencePanel: ref, direction: 'right' } : undefined,
+  });
+}
+
+export function openNodeEditorPersistent(
+  api: DockviewApi,
+  workspaceName: string,
+  flowId: string,
+  nodeId: string,
+  inActivePane: boolean,
+): void {
+  const id = persistentPanelId(workspaceName, flowId, nodeId);
+  const existing = api.panels.find((p) => p.id === id);
+  if (existing) {
+    existing.api.setActive();
+    return;
+  }
+  // Always reference the flow panel. `within` stacks the new tab alongside
+  // the flow in the same group; `right` splits into a new group.
+  const ref = flowReferencePanel(api, flowId);
+  const direction: 'within' | 'right' = inActivePane ? 'within' : 'right';
+  api.addPanel({
+    id,
+    component: 'nodeEditor',
+    tabComponent: 'nodeEditor',
+    title: nodeId,
+    params: { workspaceName, flowId, nodeId, preview: false },
+    position: ref ? { referencePanel: ref, direction } : undefined,
+  });
+}
+
+export function closeNodePreview(api: DockviewApi, workspaceName: string, flowId: string): void {
+  const id = previewPanelId(workspaceName, flowId);
+  const existing = api.panels.find((p) => p.id === id);
+  if (existing) api.removePanel(existing);
 }
