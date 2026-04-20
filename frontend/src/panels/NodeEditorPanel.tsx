@@ -91,7 +91,7 @@ export function NodeEditorPanel({ params, api: panelApi }: IDockviewPanelProps<N
       ) : (
         <NodeHeader selectedNode={selectedNode} flow={flow} node={node} onRefetch={refetch} />
       )}
-      <div className="source-tab-editor min-h-0 flex-1 overflow-auto bg-surface-0">
+      <div className="source-tab-editor min-h-0 flex-1 bg-surface-0">
         <CodeMirror
           value={node.source_code ?? ''}
           extensions={[python()]}
