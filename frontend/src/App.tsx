@@ -259,13 +259,19 @@ export default function App() {
     </>
   );
 
+  // C5: Inspector sidebar retired — node metadata now lives in the merged
+  // NodeEditorPanel tab header. Flip this flag on to re-render the sidebar
+  // while we validate parity; delete Inspector + StartInspector + handlers
+  // in C6 once the flag has been off across a working session.
+  const INSPECTOR_IN_SIDEBAR = false;
+
   const selectedKind = selectedNode
     ? activeFlowView?.nodes[selectedNode.nodeId]?.kind
     : undefined;
   const inspectorRefetch = () => {
     if (activeFlow) handleFlowMutatedWithView(activeFlow.workspaceName, activeFlow.flowId);
   };
-  const inspector = selectedNode ? (
+  const inspector = INSPECTOR_IN_SIDEBAR && selectedNode ? (
     selectedKind === 'start' ? (
       <StartInspector
         selectedNode={selectedNode}
