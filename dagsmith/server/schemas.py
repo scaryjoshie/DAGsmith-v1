@@ -115,6 +115,7 @@ class AddEdgeRequest(BaseModel):
 class DeleteEdgeRequest(BaseModel):
     from_node: str
     from_exit: str
+    to_node: str | None = None
 
 
 class NodeLayoutPosition(BaseModel):

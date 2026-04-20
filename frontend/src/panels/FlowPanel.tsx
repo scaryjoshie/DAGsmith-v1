@@ -81,20 +81,20 @@ export function FlowPanel({ params, api: panelApi }: IDockviewPanelProps<FlowPan
     }
   }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
-  const handleDeleteEdge = useCallback(async (fromNode: string, fromExit: string) => {
+  const handleDeleteEdge = useCallback(async (fromNode: string, fromExit: string, toNode: string) => {
     if (!flow) return;
     try {
-      setFlow(await deleteEdge(workspaceName, flowId, fromNode, fromExit));
+      setFlow(await deleteEdge(workspaceName, flowId, fromNode, fromExit, toNode));
     } catch (e) {
       showToast((e as Error).message);
       await refetchFlow();
     }
   }, [workspaceName, flowId, flow, refetchFlow, showToast]);
 
-  const handleReconnectEdge = useCallback(async (fromNode: string, fromExit: string, newConnection: Connection) => {
+  const handleReconnectEdge = useCallback(async (fromNode: string, fromExit: string, toNode: string, newConnection: Connection) => {
     if (!flow || !newConnection.source || !newConnection.target) return;
     try {
-      await deleteEdge(workspaceName, flowId, fromNode, fromExit);
+      await deleteEdge(workspaceName, flowId, fromNode, fromExit, toNode);
       setFlow(await addEdge(workspaceName, flowId, {
         from_node: newConnection.source,
         from_exit: newConnection.sourceHandle ?? 'out',

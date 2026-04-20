@@ -152,14 +152,15 @@ export function deleteEdge(
   workspace: string,
   flowId: string,
   fromNode: string,
-  fromExit: string
+  fromExit: string,
+  toNode?: string
 ): Promise<FlowView> {
   return request<FlowView>(
     `/api/workspaces/${encodeURIComponent(workspace)}/flows/${encodeURIComponent(flowId)}/edges`,
     {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_node: fromNode, from_exit: fromExit }),
+      body: JSON.stringify({ from_node: fromNode, from_exit: fromExit, to_node: toNode }),
     }
   );
 }

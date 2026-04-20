@@ -35,7 +35,7 @@ const EDGE_ENDPOINT_HANDLE_CLASS =
 const nodeTypes = { workflow: WorkflowNode, start: StartNode };
 
 // Context so SelectableEdge can call the delete handler without prop-drilling through edgeTypes.
-const EdgeDeleteContext = createContext<((fromNode: string, fromExit: string) => void) | null>(null);
+const EdgeDeleteContext = createContext<((fromNode: string, fromExit: string, toNode: string) => void) | null>(null);
 
 function SelectableEdge({
   id,
@@ -82,9 +82,8 @@ function SelectableEdge({
             onClick={(e) => {
               e.stopPropagation();
               if (onDeleteEdge && data) {
-                const fromNode = (data as { fromNode: string; fromExit: string }).fromNode;
-                const fromExit = (data as { fromNode: string; fromExit: string }).fromExit;
-                onDeleteEdge(fromNode, fromExit);
+                const d = data as { fromNode: string; fromExit: string; toNode: string };
+                onDeleteEdge(d.fromNode, d.fromExit, d.toNode);
               }
             }}
             title="Delete edge"
@@ -119,9 +118,9 @@ interface FlowGraphProps {
   onOpenNodeEditor?: (nodeId: string, mode: 'preview' | 'persistent-active' | 'persistent-nonactive') => void;
   onConnect: (connection: Connection) => void;
   onDeleteNode: (nodeId: string) => void;
-  onDeleteEdge: (fromNode: string, fromExit: string) => void;
+  onDeleteEdge: (fromNode: string, fromExit: string, toNode: string) => void;
   onNodePositionChange: (nodeId: string, x: number, y: number) => void;
-  onReconnectEdge: (fromNode: string, fromExit: string, newConnection: Connection) => void;
+  onReconnectEdge: (fromNode: string, fromExit: string, toNode: string, newConnection: Connection) => void;
   onExitsReorder: (nodeId: string, newOrder: string[]) => void;
   onToast?: (message: string) => void;
   onReady?: (panToNode: (nodeId: string) => void) => void;
@@ -386,7 +385,7 @@ function FlowGraphInner({
       for (const edge of removed) {
         const fromNode = edge.source;
         const fromExit = (edge.sourceHandle as string | undefined) ?? 'out';
-        onDeleteEdge(fromNode, fromExit);
+        onDeleteEdge(fromNode, fromExit, edge.target);
       }
     },
     [onDeleteEdge],
@@ -397,7 +396,7 @@ function FlowGraphInner({
       setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
       const fromNode = oldEdge.source;
       const fromExit = (oldEdge.sourceHandle as string | undefined) ?? 'out';
-      onReconnectEdge(fromNode, fromExit, newConnection);
+      onReconnectEdge(fromNode, fromExit, oldEdge.target, newConnection);
     },
     [onReconnectEdge],
   );
@@ -743,7 +742,7 @@ function layoutFlow(flow: FlowView): { nodes: GraphNode[]; edges: Edge[] } {
     target: edge.to_node,
     targetHandle: 'in',
     type: 'selectable',
-    data: { fromNode: edge.from_node, fromExit: edge.from_exit },
+    data: { fromNode: edge.from_node, fromExit: edge.from_exit, toNode: edge.to_node },
     label: edge.from_exit === 'out' ? undefined : edge.from_exit,
     labelStyle: { fill: '#c9cdd5', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, monospace' },
     labelBgStyle: { fill: '#0a0a0a' },

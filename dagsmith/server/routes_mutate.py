@@ -452,15 +452,17 @@ def build_router(registry: WorkspaceRegistry) -> APIRouter:
                 isinstance(edge, dict)
                 and edge.get("from_node") == request.from_node
                 and edge.get("from_exit") == request.from_exit
+                and (request.to_node is None or edge.get("to_node") == request.to_node)
             ):
                 match_index = idx
                 break
         if match_index is None:
+            target = f" → {request.to_node!r}" if request.to_node else ""
             raise HTTPException(
                 status_code=404,
                 detail=(
-                    f"no edge from {request.from_node!r}:{request.from_exit!r} "
-                    f"in flow {flow_id!r}"
+                    f"no edge from {request.from_node!r}:{request.from_exit!r}"
+                    f"{target} in flow {flow_id!r}"
                 ),
             )
 
