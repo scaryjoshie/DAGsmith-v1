@@ -37,8 +37,19 @@
    * it since its injection is not !important. Cover every element that
    * paints a bg: the outer .cm-editor, the gutters, and the active-line
    * hint (which @uiw's theme tints to match its own bg). */
+  /* Make the wrapper a positioning context so cm-editor can fill it with
+   * `inset: 0` — percentage-height chains through flex parents are fragile
+   * (cm-editor was collapsing to content height, parking the horizontal
+   * scrollbar halfway down the pane). */
+  .source-tab-editor {
+    position: relative;
+  }
+
   .source-tab-editor .cm-editor {
-    height: 100%;
+    /* !important beats CodeMirror's unlayered ͼ* runtime styles. */
+    position: absolute !important;
+    inset: 0 !important;
+    height: auto !important;
     font-size: var(--text-sm);
     background: var(--bg-0) !important;
   }
