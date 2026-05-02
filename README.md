@@ -1,25 +1,95 @@
 # DAGsmith
 
-Visual flowchart-based Python authoring tool. A flow is a DAG that behaves
-as a pure Python function. See `docs/DESIGN.md` and `docs/CORE_MODEL.md`
-for the full design.
+Visual flowchart authoring for Python. A flow is a DAG of typed Python
+functions that you wire up in a browser. The graph **is** the program — it
+compiles to a callable with a single `FlowResult` return.
 
-## Install
+![DAGsmith editor — customer onboarding flow with merged source editor](docs/img/screenshot-customer.png)
+
+## What's different about it
+
+- **Pro-code, not no-code.** Nodes are real Python files on disk that you
+  can edit anywhere — your editor, the browser, an LLM. The graph is just
+  another view onto code you'd write anyway.
+- **The flow is a function.** A workspace compiles to a Python callable
+  with typed inputs and named exits. You import it and call it like any
+  other function — no runtime, no engine, no DAG scheduler in production.
+- **Designed for LLMs as authors.** Edges and node metadata live in a
+  single `flow.json` per flow. An LLM can read or rewrite an entire
+  decision tree in one shot — adding branches, retyping inputs, swapping
+  refs — without grepping through hand-drawn Mermaid or untangling
+  imperative `if/elif` chains. Visual decision trees become a concrete
+  artifact LLMs can author end-to-end.
+- **Permissive backend, runtime-checked.** The backend accepts any shape
+  and emits diagnostics; the runtime raises at the point of violation.
+  You can edit a half-broken graph in the UI without it refusing to load.
+- **Public exits are inferred.** Any unconnected source handle becomes a
+  named exit of the whole flow. No explicit terminal nodes.
+- **Local-first.** A workspace is just a Python package containing
+  `flow.json` files and node modules. No database, no cloud, no account.
+
+## Stage
+
+Early. The core model, runtime, server API, and editor are working — the
+two example workspaces (`examples.minimal` and `examples.customer`) run
+end-to-end from Python and from the UI. 123 backend tests pass.
+
+The visual layer is under heavy iteration: per-node source preview tabs,
+the merged metadata-plus-editor panel, snap-stacked nodes, and the
+inferred-exit chevron all landed recently. Forward work tracked in
+`docs/CHANGES_2026-04.md` and the `docs/EDITOR_MERGE.md` /
+`docs/NODE_TAXONOMY.md` design docs. Expect things to move; the API
+surface is not stable.
+
+## Inspiration & motivation
+
+The shape of the editor owes a real debt to
+[**Windmill**](https://www.windmill.dev) — their flow editor is the
+clearest "DAG of typed functions" UX in the wild. Windmill is a hosted
+workflow runtime and a much broader product, though; DAGsmith is
+deliberately a thin local authoring tool over plain Python files, with no
+runtime of its own.
+
+The reason this exists at all: I needed clean decision-tree visualization
+for a food-tech project — a research pipeline whose branching logic was
+getting impossible to reason about as a wall of nested `if`s — and
+nothing off-the-shelf hit the right point on the simplicity / pro-code /
+graph-is-source axes. So I started writing the tool I wanted.
+
+The other deliberate target is **LLMs as the primary authors**. Flowcharts
+have always been a good way to describe branching logic to a human
+reviewer, but they've been a chore to produce by hand. An LLM that emits
+a `flow.json` is producing both an executable program and a diagram in a
+single artifact — much easier to work with than asking it to write a
+deeply nested `match` statement and hope the structure stays legible.
+
+## Stack
+
+Built on:
+
+- [**FastAPI**](https://fastapi.tiangolo.com) + [**Pydantic v2**](https://docs.pydantic.dev) — backend API + IR validation
+- [**uvicorn**](https://www.uvicorn.org) — ASGI server
+- [**React 19**](https://react.dev) + [**Vite**](https://vite.dev) + [**TypeScript**](https://www.typescriptlang.org) — frontend
+- [**xyflow / React Flow**](https://reactflow.dev) — graph canvas
+- [**Dockview**](https://dockview.dev) — IDE-style multi-pane tabs
+- [**CodeMirror 6**](https://codemirror.net) (via [`@uiw/react-codemirror`](https://uiwjs.github.io/react-codemirror/)) — source editor
+- [**Tailwind CSS v4**](https://tailwindcss.com) — styling
+
+## Try it
+
+Install the package + UI extras:
 
 ```bash
 uv sync --all-extras
 ```
 
-The `ui` extras pull in FastAPI and uvicorn for the visual UI backend.
-If you don't need the UI, plain `uv sync` is enough.
-
-## Run the test suite
+Run the test suite:
 
 ```bash
 uv run pytest
 ```
 
-## Try the minimal example from Python
+Call a flow as a Python function:
 
 ```python
 from examples.minimal import hello
@@ -32,39 +102,30 @@ hello(Greeting(name="alice"))
 # FlowResult(exit='casual', value=Reply(message='hi, alice', formal=False))
 ```
 
-## Visual UI
-
-The UI is a tiny FastAPI backend plus a React Flow + CodeMirror frontend.
-Both run locally in dev mode.
-
-**Terminal 1** — start the backend against a workspace package:
+Run the visual editor (two terminals):
 
 ```bash
-uv run dagsmith ui examples.minimal
+# terminal 1 — backend on :8001
+uv run dagsmith ui examples.customer examples.minimal
+
+# terminal 2 — frontend on :5173
+cd frontend && npm install && npm run dev
 ```
 
-This loads the workspace eagerly, prints the discovered flows, and
-serves `http://127.0.0.1:8001` with three endpoints:
+Open `http://127.0.0.1:5173/?workspace=examples.customer` (or
+`examples.minimal`).
 
-- `GET  /api/workspaces/{name}` — workspace info + flow list
-- `GET  /api/workspaces/{name}/flows/{flow_id}` — flow graph + node source code
-- `POST /api/workspaces/{name}/flows/{flow_id}/run` — run a flow with a JSON input
+![Minimal hello flow](docs/img/screenshot-minimal.png)
 
-**Terminal 2** — start the frontend dev server:
+## Layout
 
-```bash
-cd frontend
-npm install   # first time only
-npm run dev
-```
+- `dagsmith/` — IR, runtime, workspace loader, FastAPI server
+- `frontend/` — React + xyflow editor
+- `examples/` — runnable example workspaces
+- `docs/` — `SPEC.md`, `CORE_MODEL.md`, `DESIGN.md` for the model;
+  `CHANGES_*.md` for the running session log; `EDITOR_MERGE.md`,
+  `NODE_TAXONOMY.md`, `ANNOTATIONS.md`, `SIDEBAR.md` for forward design
 
-Vite serves the UI at `http://127.0.0.1:5173` (or similar). The frontend
-defaults to the `examples.minimal` workspace — override with a URL param:
-`http://127.0.0.1:5173/?workspace=your.workspace.package`.
+## License
 
-What you can do in the UI:
-
-- See the selected flow rendered as a graph (React Flow)
-- Click a node to see its Python source (CodeMirror, read-only)
-- Run the flow with a JSON input and see the `FlowResult` come back
-- Switch flows via the dropdown in the top bar
+Not yet chosen. Treat as source-available for now.
