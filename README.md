@@ -2,7 +2,7 @@
 
 Visual flowchart authoring for Python.
 
-- **Edits the graph, writes the code.** Nodes are real `.py` files in your package; authoring happens in the browser and lands as clean Python you can read and import. No compile step, no separate runtime.
+- **Live module editing.** Nodes are real `.py` files in your package; visual editing creates a clean Python module live. No compile step or separate runtime.
 - **Typed end-to-end.** Every node declares its input and named exits, so a flow is a well-defined branching function — not free-form glue.
 - **Built with LLM authoring in mind.** A flow is one small `flow.json` plus a handful of node modules — a much easier surface for a model to write coherent decision trees against than nested `if`/`match` chains. Long-term goal: make this the natural shape LLMs reach for when the task is "decide what to do next."
 
