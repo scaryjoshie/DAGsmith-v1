@@ -1,32 +1,18 @@
 # DAGsmith
 
-Visual flowchart authoring for Python. A flow is a DAG of typed Python
-functions that you wire up in a browser. The graph **is** the program — it
-compiles to a callable with a single `FlowResult` return.
+Visual flowchart authoring for Python.
+
+- **Edits the graph, writes the code.** Nodes are real `.py` files in your package; authoring happens in the browser and lands as clean Python you can read and import. No compile step, no separate runtime.
+- **Typed end-to-end.** Every node declares its input and named exits, so a flow is a well-defined branching function — not free-form glue.
+- **Built with LLM authoring in mind.** A flow is one small `flow.json` plus a handful of node modules — a much easier surface for a model to write coherent decision trees against than nested `if`/`match` chains. Long-term goal: make this the natural shape LLMs reach for when the task is "decide what to do next."
 
 ![DAGsmith editor — customer onboarding flow with merged source editor](docs/img/screenshot-customer.png)
 
-## What's different about it
+## A few more details
 
-- **Pro-code, not no-code.** Nodes are real Python files on disk that you
-  can edit anywhere — your editor, the browser, an LLM. The graph is just
-  another view onto code you'd write anyway.
-- **The flow is a function.** A workspace compiles to a Python callable
-  with typed inputs and named exits. You import it and call it like any
-  other function — no runtime, no engine, no DAG scheduler in production.
-- **Designed for LLMs as authors.** Edges and node metadata live in a
-  single `flow.json` per flow. An LLM can read or rewrite an entire
-  decision tree in one shot — adding branches, retyping inputs, swapping
-  refs — without grepping through hand-drawn Mermaid or untangling
-  imperative `if/elif` chains. Visual decision trees become a concrete
-  artifact LLMs can author end-to-end.
-- **Permissive backend, runtime-checked.** The backend accepts any shape
-  and emits diagnostics; the runtime raises at the point of violation.
-  You can edit a half-broken graph in the UI without it refusing to load.
-- **Public exits are inferred.** Any unconnected source handle becomes a
-  named exit of the whole flow. No explicit terminal nodes.
-- **Local-first.** A workspace is just a Python package containing
-  `flow.json` files and node modules. No database, no cloud, no account.
+- **Permissive backend, runtime-checked.** The backend accepts any shape and emits diagnostics; the runtime raises at the point of violation. You can edit a half-broken graph in the UI without it refusing to load.
+- **Public exits are inferred.** Any unconnected source handle becomes a named exit of the whole flow. No explicit terminal nodes.
+- **Local-first.** A workspace is just a Python package containing `flow.json` files and node modules. No database, no cloud, no account.
 
 ## Stage
 
